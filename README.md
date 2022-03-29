@@ -6,7 +6,7 @@ Befrust is:
 * A simulation/design exercise to help keep my [bfcpu project](#my-brainfuck-computer) moving along
 * A primordial form that could evolve into a general compute graph or fully-featured digital logic simulator
 * Heavily inspired by [Logisim evolution](#logisim-evolution), [calc\_graph](#calc_graph), and others
-* Copyright 2022 by Matthew Orlando, released under [GPL version 3](gpl-3.0.md). **TODO**: split into
+* Copyright 2022 by Matthew Orlando, released under [GPL version 3](LICENSE.md). **TODO**: split into
     * GPL: the toplevel `bfcpu` simulation
     * LGPL: the underlying circuit graph components
 
