@@ -30,7 +30,7 @@ impl Part for NotGatePart {
     }
 }
 
-// TODO: derive constructor and part from this
+// TODO: derive constructor and part from this?
 // #[derive(Part)]
 pub struct RsLatch {
     //#[input]
