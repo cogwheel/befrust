@@ -6,6 +6,9 @@ Befrust is:
 * A simulation/design exercise to help keep my [bfcpu project](#my-brainfuck-computer) moving along
 * A primordial form that could evolve into a general compute graph or fully-featured digital logic simulator
 * Heavily inspired by [Logisim evolution](#logisim-evolution), [calc\_graph](#calc_graph), and others
+* Copyright 2022 by Matthew Orlando, released under [GPL version 3](gpl-3.0.md). **TODO**: split into
+    * GPL: the toplevel `bfcpu` simulation
+    * LGPL: the underlying circuit graph components
 
 Befrust can:
 
@@ -20,7 +23,7 @@ Befrust doesn't:
 * Care about power (vcc, ground, or anything remotely analog)
 * Expect components to be removed or pins to be disconnected
 
-Befrust will support:
+Befrust will have:
 
 * Busses, i.e. multiple signals packed together as a group
 * Conversions between signals/busses and numbers
