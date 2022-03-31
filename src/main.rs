@@ -1,52 +1,46 @@
 use befrust::*;
 
 
+// TODO: make brainfuck computer
 fn main() {
-    let mut graph = Graph::default();
+    // also nyi
+    let mut graph = Graph::new();
+    let a = graph.new_const(Signal::Low);
+    let b = graph.new_const(Signal::High);
 
-    let s_not = NotGate::new(&mut graph);
-    let r_not = NotGate::new(&mut graph);
-    let s_or = OrGate::new(&mut graph);
-    let r_or = OrGate::new(&mut graph);
+    /*
+    let a_and_b = a & b; // returns a pin or a part?
+    let not_a = !a;
+    let a_or_b = a | b;
+    let a_xor_b = a ^ b;
 
-    // TODO: instantiate consts on the graph
-    let r = graph.new_const(Signal::Low);
-    let s = graph.new_const(Signal::Low);
+    let a_shift = a >> 1;
 
-    graph.connect(s, s_or.a);
-    graph.connect(s_or.q, s_not.a);
-    graph.connect(s_not.q, r_or.b);
+    let latch = RsLatch::new(&mut graph);
+    let ff = graph.new_part(
+        "t_flip_flop",
+        &[
+            ("t", PinState::INPUT),
+            ("s", PinState::INPUT),
+            ("r", PinState::INPUT),
+            ("q", PinState::Output(Signal::Low)),
+            ("not_q", PinState::Output(Signal::High)),
+        ],
+        move |&[input], &mut [output]|{
+            let &[t, s, r, q, not_q] = input;
+            m
+        }
+    );
+    // ff = GenericPart{name: "t_flip_flop_0123", pins: Vec[Pin{id:1}, Pin{id:2}, ...]}
+    // either:
+    graph.connect(a_and_b.q, flip_flop.r);
+    // or:
+    graph.connect(a_and_b, flip_flop.r); // either "single-out" concept or above things return a pin, not a component
 
-    graph.connect(r, r_or.a);
-    graph.connect(r_or.q, r_not.a);
-    graph.connect(r_not.q, s_or.b);
+    // impl Source for BinaryGate
+    // impl Source for Pin
 
-    let q = s_not.q;
+    // operators take an OutputPin trait.
 
-    let print = |graph: &Graph| {
-        println!("{:?}",(
-            graph.get_state(r),
-            graph.get_state(r_or.a),
-            graph.get_state(r_or.b),
-            graph.get_state(r_or.q),
-            graph.get_state(q),
-        ));
-    };
-
-    print(&graph);
-    dbg!(graph.run());
-    print(&graph);
-
-    graph.set_output(r, Signal::High);
-    dbg!(graph.run());
-    print(&graph);
-    graph.set_output(r, Signal::Low);
-    dbg!(graph.run());
-    print(&graph);
-    graph.set_output(s, Signal::High);
-    dbg!(graph.run());
-    print(&graph);
-    graph.set_output(s, Signal::Low);
-    dbg!(graph.run());
-    print(&graph);
+     */
 }
