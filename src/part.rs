@@ -1,171 +1,272 @@
 use crate::*;
 
-pub struct NotGate {
-    pub a: PinId,
-    pub q: PinId,
+use derive_getters::Getters;
+
+#[derive(Getters)]
+pub struct UnaryGate {
+    a: Pin,
+    q: Pin,
 }
 
-impl NotGate {
-    pub fn new(graph: &mut Graph) -> NotGate {
-        let pin_ids = graph.add_part(Box::new(NotGatePart));
-        NotGate {
-            a: pin_ids[0],
-            q: pin_ids[1],
+impl UnaryGate {
+    pub const A: usize = 0;
+    pub const Q: usize = 1;
+
+    pub fn new<F>(graph: &mut Graph, name: &str, updater: F) -> UnaryGate
+    where
+        F: 'static + Fn(&[PinState], &mut [PinState]),
+    {
+        let pins = graph.new_part(name, &[PinState::INPUT, PinState::OUTPUT], updater);
+        UnaryGate {
+            a: pins[Self::A].clone(),
+            q: pins[Self::Q].clone(),
         }
     }
 }
 
-struct NotGatePart;
+pub fn not_gate(graph: &mut Graph, name: &str) -> UnaryGate {
+    UnaryGate::new(graph, name, |before, after| {
+        after[UnaryGate::Q] = PinState::Output(!before[UnaryGate::A])
+    })
+}
 
-impl Part for NotGatePart {
-    fn initialize(&mut self) -> Vec<PinState> {
-        vec![PinState::INPUT, PinState::OUTPUT]
-    }
+pub fn buffer(graph: &mut Graph, name: &str) -> UnaryGate {
+    UnaryGate::new(graph, name, |before, after| after[UnaryGate::Q] = before[UnaryGate::A])
+}
 
-    fn update_pins(&mut self, input: &[PinState], output: &mut [PinState]) {
-        output[1] = match input[0] {
-            PinState::Input(signal) => PinState::Output(signal.not()),
-            _ => panic!("Unexpected pin state"),
+pub struct Gate(Vec<Pin>);
+
+#[derive(Getters)]
+pub struct BinaryGate {
+    a: Pin,
+    b: Pin,
+    q: Pin,
+}
+
+impl BinaryGate {
+    pub const A: usize = 0;
+    pub const B: usize = 1;
+    pub const Q: usize = 2;
+
+    pub fn new<F>(graph: &mut Graph, name: &str, updater: F) -> BinaryGate
+    where
+        F: 'static + Fn(&[PinState], &mut [PinState]),
+    {
+        let pins = graph.new_part(
+            name,
+            &[PinState::INPUT, PinState::INPUT, PinState::OUTPUT],
+            updater,
+        );
+        BinaryGate {
+            a: pins[Self::A].clone(),
+            b: pins[Self::B].clone(),
+            q: pins[Self::Q].clone(),
         }
     }
 }
 
-// TODO: derive constructor and part from this?
-// #[derive(Part)]
-pub struct RsLatch {
-    //#[input]
-    pub r: PinId,
-    //#[input]
-    pub s: PinId,
-
-    //#[output]
-    pub q: PinId,
-    //#[output]
-    pub q_inv: PinId,
+pub fn and_gate(graph: &mut Graph, name: &str) -> BinaryGate {
+    BinaryGate::new(graph, name, |before, after| {
+        after[BinaryGate::Q] = PinState::Output(before[BinaryGate::A] & before[BinaryGate::B]);
+    })
 }
 
-impl RsLatch {
-    pub fn new(graph: &mut Graph) -> RsLatch {
-        let pins = graph.add_part(Box::new(RsLatchPart));
-        assert_eq!(pins.len(), 4);
-        if let &[r, s, q, q_inv] = &pins[0..4] {
-            RsLatch { r, s, q, q_inv }
-        } else {
-            panic!("Unexpected pins")
-        }
+pub fn or_gate(graph: &mut Graph, name: &str) -> BinaryGate {
+    BinaryGate::new(graph, name, |before, after| {
+        after[BinaryGate::Q] = PinState::Output(before[BinaryGate::A] | before[BinaryGate::B]);
+    })
+}
+
+pub fn xor_gate(graph: &mut Graph, name: &str) -> BinaryGate {
+    BinaryGate::new(graph, name, |before, after| {
+        after[BinaryGate::Q] = PinState::Output(before[BinaryGate::A] ^ before[BinaryGate::B]);
+    })
+}
+
+impl Not for &Pin {
+    type Output = Pin;
+
+    fn not(self) -> Self::Output {
+        let mut graph = self.graph();
+        let name = format!("not({})", self.name());
+        let gate = not_gate(&mut graph, &name);
+        graph.connect(self, &gate.a());
+        gate.q().clone()
     }
 }
 
-struct RsLatchPart;
+impl Not for Pin {
+    type Output = Pin;
 
-impl Part for RsLatchPart {
-    fn initialize(&mut self) -> Vec<PinState> {
-        // TODO: random initial output state?
-        vec![
-            PinState::INPUT,  // R
-            PinState::INPUT,  // S
-            PinState::OUTPUT, // Q
-            PinState::OUTPUT, // NOT_Q
-        ]
-    }
-
-    fn update_pins(&mut self, input: &[PinState], output: &mut [PinState]) {
-        if let [PinState::Input(r), PinState::Input(s), PinState::Output(q), _] = input {
-            let new_q = match (r, s) {
-                (Signal::High, _) => Signal::Low,
-                (Signal::Low, Signal::High) => Signal::High,
-                (signal, _) | (_, signal) if !signal.is_on() => Signal::Error,
-                _ => *q,
-            };
-            output[2] = PinState::Output(new_q);
-            output[3] = PinState::Output(new_q.not());
-        } else {
-            panic!("Unexpected pins")
-        }
+    fn not(self) -> Self::Output {
+        !&self
     }
 }
 
-// TODO: make binary gates using truth tables
-#[derive(Copy, Clone)]
-pub struct AndGate {
-    pub a: PinId,
-    pub b: PinId,
-    pub q: PinId,
-}
+impl BitAnd for &Pin {
+    type Output = Pin;
 
-impl AndGate {
-    pub fn new(graph: &mut Graph) -> AndGate {
-        let pins = graph.add_part(Box::new(AndGatePart));
-
-        AndGate {
-            a: pins[0],
-            b: pins[1],
-            q: pins[2],
-        }
+    fn bitand(self, rhs: &Pin) -> Self::Output {
+        let mut graph = self.graph();
+        let name = format!("and({}, {})", self.name(), rhs.name());
+        let gate = and_gate(&mut graph, &name);
+        graph.connect(self, gate.a());
+        graph.connect(rhs, gate.b());
+        gate.q().clone()
     }
 }
 
-struct AndGatePart;
+impl BitAnd for Pin {
+    type Output = Pin;
 
-impl Part for AndGatePart {
-    fn initialize(&mut self) -> Vec<PinState> {
-        vec![PinState::INPUT, PinState::INPUT, PinState::OUTPUT]
-    }
-
-    fn update_pins(&mut self, input: &[PinState], output: &mut [PinState]) {
-        if let [a, b, _] = input {
-            output[2] = match (a, b) {
-                (PinState::Input(a), PinState::Input(b)) => PinState::Output(match (a, b) {
-                    (Signal::Error | Signal::Off, Signal::Error | Signal::Off) => Signal::Error,
-                    (Signal::High, Signal::High) => Signal::High,
-                    _ => Signal::Low,
-                }),
-                _ => panic!("Unexpected pin state"),
-            };
-        } else {
-            panic!("Unexpected number of pins");
-        }
+    fn bitand(self, rhs: Pin) -> Self::Output {
+        &self & &rhs
     }
 }
 
-#[derive(Copy, Clone)]
-pub struct OrGate {
-    pub a: PinId,
-    pub b: PinId,
-    pub q: PinId,
-}
+impl BitOr for &Pin {
+    type Output = Pin;
 
-impl OrGate {
-    pub fn new(graph: &mut Graph) -> OrGate {
-        let pins = graph.add_part(Box::new(OrGatePart));
-
-        OrGate {
-            a: pins[0],
-            b: pins[1],
-            q: pins[2],
-        }
+    fn bitor(self, rhs: &Pin) -> Self::Output {
+        let mut graph = self.graph();
+        let name = format!("or({}, {})", self.name(), rhs.name());
+        let gate = or_gate(&mut graph, &name);
+        graph.connect(&self, gate.a());
+        graph.connect(&rhs, gate.b());
+        gate.q().clone()
     }
 }
 
-struct OrGatePart;
+impl BitOr for Pin {
+    type Output = Pin;
 
-impl Part for OrGatePart {
-    fn initialize(&mut self) -> Vec<PinState> {
-        vec![PinState::INPUT, PinState::INPUT, PinState::OUTPUT]
+    fn bitor(self, rhs: Pin) -> Self::Output {
+        &self | &rhs
+    }
+}
+
+impl BitXor for &Pin {
+    type Output = Pin;
+
+    fn bitxor(self, rhs: &Pin) -> Self::Output {
+        let mut graph = self.graph();
+        let name = format!("xor({}, {})", self.name(), rhs.name());
+        let gate = xor_gate(&mut graph, &name);
+        graph.connect(self, gate.a());
+        graph.connect(rhs, gate.b());
+        gate.q().clone()
+    }
+}
+
+impl BitXor for Pin {
+    type Output = Pin;
+
+    fn bitxor(self, rhs: Pin) -> Self::Output {
+        &self ^ &rhs
+    }
+}
+
+macro_rules! assert_sig {
+    ($pin:expr, $sig:expr) => {
+        assert_eq!($pin.sig(), $sig)
+    }
+}
+
+macro_rules! assert_low {
+    ($pin:expr) => {
+        assert_sig!($pin, Signal::Low)
+    }
+}
+
+macro_rules! assert_high {
+    ($pin:expr) => {
+        assert_sig!($pin, Signal::High)
+    }
+}
+
+#[cfg(test)]
+mod test_gates {
+    use crate::*;
+
+    #[test]
+    fn test_not_gate() {
+        let mut graph = Graph::new();
+
+        let a = graph.new_output("a", Signal::High);
+        let not1 = not_gate(&mut graph, "not2");
+        let not2 = not_gate(&mut graph, "not1");
+
+        graph.connect(&a, not1.a());
+        graph.connect(not1.q(), not2.a());
+
+        graph.run();
+
+        assert_low!(not1.q());
+        assert_high!(not2.q());
     }
 
-    fn update_pins(&mut self, input: &[PinState], output: &mut [PinState]) {
-        if let [a, b, _] = input {
-            output[2] = match (a, b) {
-                (PinState::Input(a), PinState::Input(b)) => PinState::Output(match (a, b) {
-                    (Signal::Error | Signal::Off, Signal::Error | Signal::Off) => Signal::Error,
-                    (Signal::High, _) | (_, Signal::High) => Signal::High,
-                    _ => Signal::Low,
-                }),
-                _ => panic!("Unexpected pin state"),
-            };
-        } else {
-            panic!("Unexpected number of pins");
-        }
+    #[test]
+    fn test_and_gate() {
+        let mut graph = Graph::new();
+
+        let high = graph.new_output("a", Signal::High);
+        let low = graph.new_output("a", Signal::Low);
+        let high2 = graph.new_output("a", Signal::High);
+
+        let high_and_low = and_gate(&mut graph, "and1");
+        let high_and_high = and_gate(&mut graph, "and2");
+
+        graph.connect_all(&[&high, high_and_low.a(), high_and_high.a()]);
+        graph.connect(&low, high_and_low.b());
+        graph.connect(&high2, high_and_high.b());
+
+        graph.run();
+
+        assert_low!(high_and_low.q());
+        assert_high!(high_and_high.q());
+    }
+}
+
+
+#[cfg(test)]
+mod test_ops {
+    use crate::*;
+
+    #[test]
+    fn test_unary() {
+        let mut graph = Graph::new();
+
+        let high = graph.new_output("high", Signal::High);
+
+        let not_high = !&high;
+
+        let yes_high = !!high;
+
+        graph.run();
+
+        assert_low!(not_high);
+        assert_high!(yes_high);
+    }
+
+    #[test]
+    fn test_binary() {
+        let mut graph = Graph::new();
+
+        let high = graph.new_output("high", Signal::High);
+        let low = graph.new_output("low", Signal::Low);
+
+        let high_and_low = &high & &low;
+        let high_and_low_or_high = &high_and_low | &high;
+
+        let high_xor_low1 = &high ^ &low;
+        let high_xor_low2 = (&high & &!&low) | (&!&high & &low);
+
+        graph.run();
+
+        assert_low!(high_and_low);
+        assert_high!(high_and_low_or_high);
+
+        assert_high!(high_xor_low1);
+        assert_high!(high_xor_low2);
     }
 }
