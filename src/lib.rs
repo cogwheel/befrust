@@ -1,37 +1,33 @@
-pub mod part;
 pub mod graph;
+pub mod part;
 
 use std::ops::{BitAnd, BitOr, BitXor, Not};
 
-pub use part::*;
 pub use graph::*;
+pub use part::*;
 
+/// The logical value for a given node, pin, etc.
+///
+/// TODO: supporting busses might mean changing this to some kind of bitset
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Hash)]
 pub enum Signal {
+    /// No signal present, high impedance, etc.
     Off,
+
+    /// Logical Low (0, False, etc.)
     Low,
+
+    /// Logical High (1, True, etc.)
     High,
+
+    /// Uninitialized, indeterminate, or other problematic states
+    ///
+    /// Kind of like NaN in logical operations If any input is Error, then Error.
     Error,
 }
 
-impl Signal {
-    pub const fn is_on(&self) -> bool {
-        match self {
-            Signal::Low | Signal::High => true,
-            _ => false,
-        }
-    }
-
-    pub const fn not(&self) -> Signal {
-        match *self {
-            Signal::Low => Signal::High,
-            Signal::High => Signal::Low,
-            _ => Signal::Error,
-        }
-    }
-}
-
 impl Default for Signal {
+    /// The default is Error to make it more obvious when things have not been connected correctly
     fn default() -> Signal {
         Signal::Error
     }
@@ -40,38 +36,66 @@ impl Default for Signal {
 impl Not for Signal {
     type Output = Signal;
 
+    /// Logical Not
+    ///
+    /// The behavior for Off is somewhat arbitrary. Logisim, e.g., returns Error.
+    ///
+    /// TODO: consider removing the ops for signals if the behavior will depend on the pin's pull
     fn not(self) -> Signal {
         match self {
             Signal::High => Signal::Low,
             Signal::Low => Signal::High,
-            Signal::Off => Signal::Off, // TODO: support pull?
+            Signal::Off => Signal::Off, // TODO: support pull
             _ => Signal::Error,
         }
     }
 }
 
+macro_rules! either_are {
+    ($val:path) => {
+        ($val, _) | (_, $val)
+    };
+}
+
+macro_rules! both_are {
+    ($val:path) => {
+        ($val, $val)
+    };
+}
+
+macro_rules! one_is {
+    ($val:path, $binding:ident) => {
+        ($val, $binding) | ($binding, $val)
+    };
+}
+
 impl BitAnd for Signal {
     type Output = Signal;
 
+    /// Logical And
+    ///
+    /// Single Off treated as Low
     fn bitand(self, rhs: Self) -> Signal {
         match (self, rhs) {
-            (Signal::Error, _) | (_, Signal::Error) => Signal::Error,
-            (Signal::Off, Signal::Off) => Signal::Off,
-            (Signal::High, Signal::High) => Signal::High,
+            either_are!(Signal::Error) => Signal::Error,
+            both_are!(Signal::Off) => Signal::Off,
+            both_are!(Signal::High) => Signal::High,
             _ => Signal::Low,
         }
     }
 }
 
-
 impl BitOr for Signal {
     type Output = Signal;
 
+    /// Logical Or
+    ///
+    /// Single Off treated as Low
     fn bitor(self, rhs: Self) -> Signal {
         match (self, rhs) {
-            (Signal::Error, _) | (_, Signal::Error) => Signal::Error,
-            (Signal::Off, a) | (a, Signal::Off) => a,
-            (Signal::Low, Signal::Low) => Signal::Low,
+            either_are!(Signal::Error) => Signal::Error,
+            one_is!(Signal::Off, a) => a,
+            both_are!(Signal::Low) => Signal::Low,
             _ => Signal::High,
         }
     }
@@ -80,30 +104,62 @@ impl BitOr for Signal {
 impl BitXor for Signal {
     type Output = Signal;
 
+    /// Logical Or
+    ///
+    /// Single Off treated as Low
     fn bitxor(self, rhs: Self) -> Signal {
         match (self, rhs) {
-            (Signal::Error, _) | (_, Signal::Error) => Signal::Error,
-            (Signal::Off, Signal::Off) => Signal::Off,
-            (a, Signal::High) | (Signal::High, a) if a != Signal::High => Signal::High,
+            either_are!(Signal::Error) => Signal::Error,
+            both_are!(Signal::Off) => Signal::Off,
+            one_is!(Signal::High, a) if a != Signal::High => Signal::High,
             _ => Signal::Low,
         }
     }
 }
 
-
+/// The connection state and signal for a pin
+///
+/// Parts update their PinStates each tick. This allows connections to change between input, output,
+/// and high impedance states (e.g. for chip enable, bidirectional ports, etc.)
+///
+// TODO: rename to Port? might confuse with Part
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Hash)]
 pub enum PinState {
+    /// High impedance, acting as neither an input nor an output. Logically Off
     HiZ,
+
+    /// An input receives its signal from the connected Node
     Input(Signal), // TODO: PullUp/Down
+
+    /// An output places its signal onto the connected Node
     Output(Signal),
 }
 
 impl PinState {
+    /// Shorthand for a default input. Off until it gets a value from the Node.
     pub const INPUT: PinState = PinState::Input(Signal::Off);
+
+    /// Shorthand for a default output. Error until the Part's updater runs.
     pub const OUTPUT: PinState = PinState::Output(Signal::Error);
 
-    pub fn signal(self) -> Signal {
-        self.into()
+    /// Get the logical signal for the PinState
+    ///
+    /// TODO: should this be q()?
+    pub fn sig(self) -> Signal {
+        match self {
+            PinState::HiZ => Signal::Off,
+            PinState::Input(signal) | PinState::Output(signal) => signal,
+        }
+    }
+
+    /// Helper for treating Off the same as Low
+    pub fn is_lowish(self) -> bool {
+        [Signal::Low, Signal::Off].contains(&self.sig())
+    }
+
+    /// TODO: add others?
+    pub fn is_high(self) -> bool {
+        self.sig() == Signal::High
     }
 }
 
@@ -113,12 +169,9 @@ impl Default for PinState {
     }
 }
 
-impl Into<Signal> for PinState {  // TODO: rename Port? might confuse with Part...
+impl Into<Signal> for PinState {
     fn into(self) -> Signal {
-        match self {
-            PinState::HiZ => Signal::Off,
-            PinState::Input(signal) | PinState::Output(signal) => signal,
-        }
+        self.sig()
     }
 }
 
@@ -126,7 +179,7 @@ impl Not for PinState {
     type Output = Signal;
 
     fn not(self) -> Signal {
-        !self.signal()
+        !self.sig()
     }
 }
 
@@ -134,7 +187,7 @@ impl BitAnd for PinState {
     type Output = Signal;
 
     fn bitand(self, rhs: Self) -> Signal {
-        self.signal() & rhs.signal()
+        self.sig() & rhs.sig()
     }
 }
 
@@ -142,7 +195,7 @@ impl BitOr for PinState {
     type Output = Signal;
 
     fn bitor(self, rhs: Self) -> Signal {
-        self.signal() | rhs.signal()
+        self.sig() | rhs.sig()
     }
 }
 
@@ -150,7 +203,7 @@ impl BitXor for PinState {
     type Output = Signal;
 
     fn bitxor(self, rhs: Self) -> Signal {
-        self.signal() ^ rhs.signal()
+        self.sig() ^ rhs.sig()
     }
 }
 

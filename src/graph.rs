@@ -2,21 +2,35 @@ use crate::*;
 use std::cell::{RefCell, RefMut};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::Range;
-use std::rc::{Rc};
+use std::rc::Rc;
 
 pub type PinId = usize;
 
+/// A handle to a PinState that exists in the graph
+///
+/// Pins are created for parts and connected together into Nodes. Signals propagate alternately from
+/// nodes to parts and back, via their connected pins.
 #[derive(Clone)]
 pub struct Pin {
     id: PinId,
+    name: String,
     graph: Graph,
 }
 
 impl Pin {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn graph(&self) -> Graph {
         self.graph.clone()
+    }
+
+    pub fn sig(&self) -> Signal {
+        self.graph.clone().get_signal(self)
     }
     // get_state(&self)
     // get_signal(&self)
@@ -24,6 +38,16 @@ impl Pin {
     // set_signal
 }
 
+impl Debug for Pin {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let name = format!("[{}]:{}", self.id, self.name);
+        f.debug_tuple(&name)
+            .field(&self.graph().get_state(&self))
+            .finish()
+    }
+}
+
+/// A set of mutually connected pins
 #[derive(Debug, Default, Hash, PartialEq, PartialOrd)]
 struct Node {
     pin_ids: BTreeSet<PinId>,
@@ -39,24 +63,41 @@ impl Node {
     }
 }
 
-type Part = Box<dyn FnMut(&[PinState], &mut[PinState])>;
+/// A set of pins with an update function
+///
+/// The update function is called each tick with the "before" and "after" states for the pins
+type Part = Box<dyn Fn(&[PinState], &mut [PinState])>;
 
+/// The interface to the befrust compute graph
+///
+/// This is a shared reference so that Pins can mutate their graph for new connections
 #[derive(Clone)]
 pub struct Graph(Rc<RefCell<GraphImpl>>);
 
+/// Internal data structures for the compute graph
 #[derive(Default)]
 struct GraphImpl {
+    /// Current state of all pins in the graph
     pub pin_states: Vec<PinState>,
+
+    /// Output states for part updates
+    pub back_buffer: Vec<PinState>,
+
+    /// Set of Nodes in the graph. Implemented as map for reverse lookup
+    ///
+    /// TODO: this could be a vector for cache friendliness but it would either:
+    ///   * require extra logic to update the reverse lookup
+    ///   * leave a bunch of empty nodes as pins are connected to each other
     pub nodes: BTreeMap<usize, Node>,
-    pub pin_nodes: Vec<usize>,  // Reverse look-up for connections
 
+    /// Used to assign node ids
+    pub next_node: usize,
+
+    /// Reverse lookup for pins
+    pub pin_nodes: Vec<usize>, // Reverse look-up for connections
+
+    /// Parts for updating output pins
     pub parts: Vec<(Part, Range<usize>)>,
-
-    pub next_node: usize, // TODO: maybe switch back to Uuid?
-
-    pub back_buffer: Vec<PinState>,  // Back buffer for pin states
-
-//    weak_self: Option<Weak<RefCell<GraphImpl>>>,
 }
 
 /// Update and cycle information for a run of the graph
@@ -75,7 +116,6 @@ pub struct RunStats {
 }
 
 impl GraphImpl {
-
     fn new_pin(&mut self, state: PinState) -> PinId {
         let id = self.pin_states.len();
         self.pin_states.push(state);
@@ -83,7 +123,7 @@ impl GraphImpl {
         let node_id = self.next_node;
         self.next_node += 1;
         let insertion = self.nodes.insert(node_id, Node::new(id));
-        assert!(matches!(insertion, None), "Uuid collision");
+        assert!(matches!(insertion, None), "Node id collision");
 
         self.pin_nodes.push(node_id);
 
@@ -152,11 +192,13 @@ impl GraphImpl {
         for (part, pin_range) in self.parts.iter_mut() {
             let start = pin_range.start;
             let end = pin_range.end;
-            part(&self.pin_states[start..end], &mut self.back_buffer[start..end]);
+            part(
+                &self.pin_states[start..end],
+                &mut self.back_buffer[start..end],
+            );
         }
         std::mem::swap(&mut self.pin_states, &mut self.back_buffer);
     }
-
 }
 
 impl Graph {
@@ -168,40 +210,58 @@ impl Graph {
         (*self.0).borrow_mut()
     }
 
-    pub fn new_pin(&mut self, state: PinState) -> Pin {
+    pub fn new_pin(&mut self, name: String, state: PinState) -> Pin {
         Pin {
             id: self.g().new_pin(state),
+            name,
             graph: self.clone(),
         }
     }
 
-    pub fn new_const(&mut self, signal: Signal) -> Pin {
-        self.new_pin(PinState::Output(signal))
+    pub fn new_input(&mut self, name: &str) -> Pin {
+        self.new_pin(name.to_owned(), PinState::Input(Signal::default()))
     }
 
-    pub fn new_input(&mut self) -> Pin {
-        self.new_pin(PinState::Input(Signal::default()))
-    }
-
-    pub fn new_output(&mut self) -> Pin {
-        self.new_pin(PinState::Output(Signal::default()))
+    pub fn new_output(&mut self, name: &str, signal: Signal) -> Pin {
+        self.new_pin(name.to_owned(), PinState::Output(signal))
     }
 
     pub fn connect(&mut self, a: &Pin, b: &Pin) {
-        assert_eq!(a.graph.0.as_ptr(), self.0.as_ptr());
-        assert_eq!(b.graph.0.as_ptr(), self.0.as_ptr());
-
         self.g().connect(a, b);
     }
 
-    pub fn add_part<F>(&mut self, new_states: &[PinState], updater: F) -> Vec<Pin> where
-        F: 'static + FnMut(&[PinState], &mut[PinState])
+    pub fn connect_all(&mut self, pins: &[&Pin]) {
+        let (first, rest) = pins.split_first().expect("Not enough pins to connect");
+        for pin in rest {
+            self.g().connect(first, pin);
+        }
+    }
+
+    pub fn new_pins(&mut self, name: &str, new_states: &[PinState]) -> Vec<Pin> {
+        new_states
+            .iter()
+            .enumerate()
+            .map(|(i, s)| self.new_pin(format!("{}[{}]", name, i), *s))
+            .collect()
+    }
+
+    /// Creates a part
+    ///
+    /// A "part" is a set of pins with an associated update function. Each tick, the associated
+    /// update function produces a new set of PinStates given the existing states.
+    ///
+    /// TODO: take (name, state) pairs
+    pub fn new_part<F>(&mut self, name: &str, new_states: &[PinState], updater: F) -> Vec<Pin>
+    where
+        F: 'static + Fn(&[PinState], &mut [PinState]),
     {
         let start = self.g().pin_states.len();
         let end = start + new_states.len();
-        self.g().parts.push((Box::new(updater), Range{start, end}));
+        self.g()
+            .parts
+            .push((Box::new(updater), Range { start, end }));
 
-        new_states.iter().map(|s| self.new_pin(*s)).collect()
+        self.new_pins(name, new_states)
     }
 
     pub fn update_parts(&mut self) {
@@ -246,6 +306,11 @@ impl Graph {
             }
         }
 
+        println!(
+            "ticks: {}, updates: {}, cycle: {}",
+            stats.ticks, stats.updates, stats.cycle
+        );
+
         stats
     }
 
@@ -264,7 +329,6 @@ impl Graph {
     }
 }
 
-
 #[cfg(test)]
 mod test_graph {
     use crate::*;
@@ -273,14 +337,15 @@ mod test_graph {
     fn create_graph() {
         let mut graph = Graph::new();
 
-        let a = graph.new_const(Signal::High);
-        //let b = graph.new_const(Signal::High);
+        let a = graph.new_output("a", Signal::High);
+        //let b = graph.new_output(Signal::High);
 
-        let pins = graph.add_part(
+        let pins = graph.new_part(
+            "not_gate",
             &[PinState::INPUT, PinState::OUTPUT],
             |input, output| {
                 output[1] = PinState::Output(!(input[0]));
-            }
+            },
         );
 
         graph.connect(&a, &pins[0]);
