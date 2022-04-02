@@ -2,7 +2,7 @@ use befrust::*;
 use derive_getters::Getters;
 
 #[derive(Debug, Getters)]
-pub struct TFlipFlop{
+pub struct TFlipFlop {
     t: Pin,
     s: Pin,
     r: Pin,
@@ -47,7 +47,7 @@ impl TFlipFlop {
                 after[Self::T_PREV] = before[Self::T];
             },
         );
-        TFlipFlop{
+        TFlipFlop {
             t: pins[Self::T].clone(),
             s: pins[Self::S].clone(),
             r: pins[Self::R].clone(),
@@ -58,7 +58,7 @@ impl TFlipFlop {
 }
 
 #[derive(Debug, Getters)]
-pub struct AdderImpl {
+pub struct HalfAdder {
     d: Pin,
     clear: Pin,
     load: Pin,
@@ -67,12 +67,18 @@ pub struct AdderImpl {
     flip_flop: TFlipFlop,
 }
 
-impl AdderImpl {
-    pub fn t(&self) -> &Pin { self.flip_flop.t() }
-    pub fn q(&self) -> &Pin { self.flip_flop.q() }
-    pub fn q_inv(&self) -> &Pin { self.flip_flop.q_inv() }
+impl HalfAdder {
+    pub fn t(&self) -> &Pin {
+        self.flip_flop.t()
+    }
+    pub fn q(&self) -> &Pin {
+        self.flip_flop.q()
+    }
+    pub fn q_inv(&self) -> &Pin {
+        self.flip_flop.q_inv()
+    }
 
-    pub fn new(graph: &mut Graph, name: &str) -> AdderImpl {
+    pub fn new(graph: &mut Graph, name: &str) -> HalfAdder {
         let d = graph.new_input(&format!("{}.d", name));
         let clear = graph.new_input(&format!("{}.clear", name));
         let load = graph.new_input(&format!("{}.load", name));
@@ -87,7 +93,12 @@ impl AdderImpl {
         graph.connect(&set, flip_flop.s());
         graph.connect(&reset_ff, flip_flop.r());
 
-        AdderImpl {d, clear, load, flip_flop}
+        HalfAdder {
+            d,
+            clear,
+            load,
+            flip_flop,
+        }
     }
 }
 
@@ -98,34 +109,166 @@ struct FullAdder {
     up_cond: Pin,
     down_cond: Pin,
 
+    // TODO: figure out how to do #[getter(forward)]
+    // TODO: figure out how to contact the author of derive-getters
     #[getter(skip)]
-    adder_impl: AdderImpl,
+    half_adder: HalfAdder,
 }
 
 impl FullAdder {
-    pub fn d(&self) -> &Pin { &self.adder_impl.d() }
-    pub fn clear(&self) -> &Pin { self.adder_impl.clear() }
-    pub fn load(&self) -> &Pin { self.adder_impl.load() }
-
-    const UP: usize = 0;
-    const DOWN: usize = 1;
-    const UP_COND: usize = 2;
-    const DOWN_COND: usize = 3;
+    pub fn d(&self) -> &Pin {
+        &self.half_adder.d()
+    }
+    pub fn clear(&self) -> &Pin {
+        self.half_adder.clear()
+    }
+    pub fn load(&self) -> &Pin {
+        self.half_adder.load()
+    }
+    pub fn q(&self) -> &Pin {
+        self.half_adder.q()
+    }
+    pub fn q_inv(&self) -> &Pin {
+        self.half_adder.q_inv()
+    }
 
     pub fn new(graph: &mut Graph, name: &str) -> FullAdder {
-        let adder = FullAdder{
+        let adder = FullAdder {
             up: graph.new_input(&format!("{}.up", name)),
             down: graph.new_input(&format!("{}.down", name)),
             up_cond: graph.new_input(&format!("{}.up_cond", name)),
             down_cond: graph.new_input(&format!("{}.down_cond", name)),
-            adder_impl: AdderImpl::new(graph, &format!("{}.impl", name)),
+            half_adder: HalfAdder::new(graph, &format!("{}.half", name)),
         };
 
         let toggle = !(adder.up() & adder.up_cond() | adder.down() & adder.down_cond());
 
-        graph.connect(&toggle, adder.adder_impl.t());
+        graph.connect(&toggle, adder.half_adder.t());
 
         adder
+    }
+}
+
+#[derive(Getters)]
+struct Ic74193 {
+    // inputs
+    up: Pin,
+    down: Pin,
+    load_inv: Pin,
+    clear: Pin,
+
+    // outputs
+    borrow: Pin,
+    carry: Pin,
+
+    #[getter(skip)]
+    adder1: HalfAdder,
+    #[getter(skip)]
+    adder2: FullAdder,
+    #[getter(skip)]
+    adder3: FullAdder,
+    #[getter(skip)]
+    adder4: FullAdder,
+}
+
+impl Ic74193 {
+    pub fn d1(&self) -> &Pin {
+        self.adder1.d()
+    }
+    pub fn d2(&self) -> &Pin {
+        self.adder2.d()
+    }
+    pub fn d3(&self) -> &Pin {
+        self.adder3.d()
+    }
+    pub fn d4(&self) -> &Pin {
+        self.adder4.d()
+    }
+
+    pub fn q1(&self) -> &Pin {
+        self.adder1.q()
+    }
+    pub fn q2(&self) -> &Pin {
+        self.adder2.q()
+    }
+    pub fn q3(&self) -> &Pin {
+        self.adder3.q()
+    }
+    pub fn q4(&self) -> &Pin {
+        self.adder4.q()
+    }
+
+    pub fn new(graph: &mut Graph, name: &str) -> Ic74193 {
+        let up_inv = not_gate(graph, &format!("{}.up_inv", name));
+        let down_inv = not_gate(graph, &format!("{}.down_inv", name));
+        let load = not_gate(graph, &format!("{}.load", name));
+        let clear_inv = not_gate(graph, &format!("{}.clear_inv", name));
+        let adder1 = HalfAdder::new(graph, &format!("{}.adder1", name));
+        let adder2 = FullAdder::new(graph, &format!("{}.adder2", name));
+        let adder3 = FullAdder::new(graph, &format!("{}.adder3", name));
+        let adder4 = FullAdder::new(graph, &format!("{}.adder4", name));
+
+        let carry = nand_nary(graph, "carry", 5);
+        carry.connect_inputs(&[up_inv.q(), adder1.q(), adder2.q(), adder3.q(), adder4.q()]);
+
+        let borrow = nand_nary(graph, "borrow", 5);
+        borrow.connect_inputs(&[
+            down_inv.q(),
+            adder1.q_inv(),
+            adder2.q_inv(),
+            adder3.q_inv(),
+            adder4.q_inv(),
+        ]);
+
+        let toggle1 = !(up_inv.q() | down_inv.q());
+
+        toggle1.connect(adder1.t());
+
+        let up_cond2 = adder1.q();
+        let down_cond2 = adder1.q_inv();
+        graph.connect(&up_cond2, adder2.up_cond());
+        graph.connect(&down_cond2, adder2.down_cond());
+
+        let up_cond3 = up_cond2 & adder2.q();
+        let down_cond3 = down_cond2 & adder2.q_inv();
+        graph.connect(&up_cond3, adder3.up_cond());
+        graph.connect(&down_cond3, adder3.down_cond());
+
+        let up_cond4 = &up_cond3 & adder3.q();
+        let down_cond4 = &down_cond3 & adder3.q_inv();
+        graph.connect(&up_cond4, adder4.up_cond());
+        graph.connect(&down_cond4, adder4.down_cond());
+
+        up_inv
+            .q()
+            .connect_all(&[adder2.up(), adder3.up(), adder4.up()]);
+
+        down_inv
+            .q()
+            .connect_all(&[adder2.down(), adder3.down(), adder4.down()]);
+
+        load.q()
+            .connect_all(&[adder1.load(), adder2.load(), adder3.load(), adder4.load()]);
+
+        clear_inv.q().connect_all(&[
+            adder1.clear(),
+            adder2.clear(),
+            adder3.clear(),
+            adder4.clear(),
+        ]);
+
+        Ic74193 {
+            up: up_inv.a().clone(),
+            down: down_inv.a().clone(),
+            load_inv: load.a().clone(),
+            clear: clear_inv.a().clone(),
+            carry: carry.q().clone(),
+            borrow: borrow.q().clone(),
+            adder1,
+            adder2,
+            adder3,
+            adder4,
+        }
     }
 }
 
@@ -134,35 +277,61 @@ fn main() {
     // also nyi
     let mut graph = Graph::new();
 
+    // outputs from other components
     let d1 = graph.new_output("d1", Signal::High);
-    let load = graph.new_output("load", Signal::Low);
-    let clear = graph.new_output("clear", Signal::Low);
-    let up = graph.new_output("up", Signal::Low);
-    let down = graph.new_output("down", Signal::Low);
+    let d2 = graph.new_output("d2", Signal::High);
+    let d3 = graph.new_output("d3", Signal::High);
+    let d4 = graph.new_output("d4", Signal::High);
+    let load_inv = graph.new_output("load_inv", Signal::High);
+    let mut clear = graph.new_output("clear", Signal::High);
+    let mut up = graph.new_output("up", Signal::High);
+    let down = graph.new_output("down", Signal::High);
 
-    let adder1 = AdderImpl::new(&mut graph, "adder1");
-    let toggle1 = !(&up | &down);
+    let counter = Ic74193::new(&mut graph, "counter");
 
-    graph.connect(&d1, adder1.d());
-    graph.connect(&clear, &!adder1.clear());
-    graph.connect(&load, adder1.load());
-    graph.connect(&toggle1, adder1.t());
+    graph.connect(&d1, counter.d1());
+    graph.connect(&d2, counter.d2());
+    graph.connect(&d3, counter.d3());
+    graph.connect(&d4, counter.d4());
+    graph.connect(&up, counter.up());
+    graph.connect(&down, counter.down());
 
-    let mut end = graph.new_output("start", Signal::Low);
-    for _ in 0..20_000 {
-        end = !end;
+    let counter2 = Ic74193::new(&mut graph, "counter2");
+    graph.connect(counter.carry(), counter2.up());
+    graph.connect(counter.borrow(), counter2.down());
+    graph.connect_all(&[&load_inv, counter.load_inv(), counter2.load_inv()]);
+    graph.connect_all(&[&clear, counter.clear(), counter2.clear()]);
+
+    graph.run();
+
+    println!(
+        "start {:?}",
+        &[
+            counter.q1().sig(),
+            counter.q2().sig(),
+            counter.q3().sig(),
+            counter.q4().sig(),
+            counter2.q1().sig(),
+        ]
+    );
+
+    graph.set_output(&mut clear, Signal::Low);
+
+    for i in 0..16 {
+        up.set_output(Signal::Low);
+        graph.run();
+        up.set_output(Signal::High);
+        graph.run();
+        println!(
+            "up high {} {:?}",
+            i,
+            &[
+                counter.q1().sig(),
+                counter.q2().sig(),
+                counter.q3().sig(),
+                counter.q4().sig(),
+                counter2.q1().sig(),
+            ]
+        );
     }
-
-    println!("{:?}", adder1.q());
-    graph.run();
-    println!("{:?}", adder1.q());
-
-    graph.set_output(&up, Signal::High);
-    graph.run();
-    println!("{:?}", adder1.q());
-
-    graph.set_output(&up, Signal::Low);
-    graph.run();
-
-    println!("{:?}", adder1.q());
 }

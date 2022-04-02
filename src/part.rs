@@ -1,3 +1,4 @@
+// TODO: rename this to gate.rs
 use crate::*;
 
 use derive_getters::Getters;
@@ -31,10 +32,10 @@ pub fn not_gate(graph: &mut Graph, name: &str) -> UnaryGate {
 }
 
 pub fn buffer(graph: &mut Graph, name: &str) -> UnaryGate {
-    UnaryGate::new(graph, name, |before, after| after[UnaryGate::Q] = before[UnaryGate::A])
+    UnaryGate::new(graph, name, |before, after| {
+        after[UnaryGate::Q] = before[UnaryGate::A]
+    })
 }
-
-pub struct Gate(Vec<Pin>);
 
 #[derive(Getters)]
 pub struct BinaryGate {
@@ -166,22 +167,76 @@ impl BitXor for Pin {
     }
 }
 
+pub struct NaryGate(Vec<Pin>);
+
+impl NaryGate {
+    pub fn a(&self) -> &[Pin] {
+        &self.0[1..]
+    }
+    pub fn n(&self, n: usize) -> &Pin {
+        &self.0[n + 1]
+    }
+    pub fn q(&self) -> &Pin {
+        &self.0[0]
+    }
+
+    pub fn new<F>(graph: &mut Graph, name: &str, inputs: usize, updater: F) -> NaryGate
+    where
+        F: 'static + Fn(&[PinState], &mut [PinState]),
+    {
+        let mut states = vec![PinState::INPUT; inputs + 1];
+        states[0] = PinState::OUTPUT;
+        NaryGate(graph.new_part(name, &states, updater))
+    }
+
+    pub fn connect_inputs(&self, pins: &[&Pin]) {
+        for (i, pin) in pins.iter().enumerate() {
+            pin.connect(self.n(i));
+        }
+    }
+}
+
+pub fn and_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
+    NaryGate::new(graph, name, inputs, |before, after| {
+        let mut result = before[1].sig();
+        for state in &before[2..] {
+            result &= state.sig();
+        }
+
+        after[0] = PinState::Output(result);
+    })
+}
+
+pub fn nand_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
+    NaryGate::new(graph, name, inputs, |before, after| {
+        let mut result = before[1].sig();
+        for state in &before[2..] {
+            result &= state.sig();
+        }
+
+        after[0] = PinState::Output(!result);
+    })
+}
+
+#[cfg(test)]
 macro_rules! assert_sig {
     ($pin:expr, $sig:expr) => {
         assert_eq!($pin.sig(), $sig)
-    }
+    };
 }
 
+#[cfg(test)]
 macro_rules! assert_low {
     ($pin:expr) => {
         assert_sig!($pin, Signal::Low)
-    }
+    };
 }
 
+#[cfg(test)]
 macro_rules! assert_high {
     ($pin:expr) => {
         assert_sig!($pin, Signal::High)
-    }
+    };
 }
 
 #[cfg(test)]
@@ -225,8 +280,51 @@ mod test_gates {
         assert_low!(high_and_low.q());
         assert_high!(high_and_high.q());
     }
-}
 
+    #[test]
+    fn test_and_nary() {
+        let mut graph = Graph::new();
+        let a1 = graph.new_output("a1", Signal::High);
+        let a2 = graph.new_output("a2", Signal::High);
+        let a3 = graph.new_output("a3", Signal::High);
+        let mut a4 = graph.new_output("a4", Signal::High);
+
+        let andy = and_nary(&mut graph, "andy", 4);
+
+        andy.connect_inputs(&[&a1, &a2, &a3, &a4]);
+
+        graph.run();
+
+        assert_high!(andy.q());
+
+        a4.set_output(Signal::Low);
+        graph.run();
+
+        assert_low!(andy.q());
+    }
+
+    #[test]
+    fn test_nand_nary() {
+        let mut graph = Graph::new();
+        let a1 = graph.new_output("a1", Signal::High);
+        let a2 = graph.new_output("a2", Signal::High);
+        let a3 = graph.new_output("a3", Signal::High);
+        let mut a4 = graph.new_output("a4", Signal::Low);
+
+        let nandy = nand_nary(&mut graph, "nandy", 4);
+
+        nandy.connect_inputs(&[&a1, &a2, &a3, &a4]);
+
+        graph.run();
+
+        assert_high!(nandy.q());
+
+        a4.set_output(Signal::High);
+        graph.run();
+
+        assert_low!(nandy.q());
+    }
+}
 
 #[cfg(test)]
 mod test_ops {
