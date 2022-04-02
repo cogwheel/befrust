@@ -1,7 +1,7 @@
 pub mod graph;
 pub mod part;
 
-use std::ops::{BitAnd, BitOr, BitXor, Not};
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
 pub use graph::*;
 pub use part::*;
@@ -85,6 +85,12 @@ impl BitAnd for Signal {
     }
 }
 
+impl BitAndAssign for Signal {
+    fn bitand_assign(&mut self, rhs: Self) {
+        *self = *self & rhs
+    }
+}
+
 impl BitOr for Signal {
     type Output = Signal;
 
@@ -98,6 +104,11 @@ impl BitOr for Signal {
             both_are!(Signal::Low) => Signal::Low,
             _ => Signal::High,
         }
+    }
+}
+impl BitOrAssign for Signal {
+    fn bitor_assign(&mut self, rhs: Self) {
+        *self = *self | rhs
     }
 }
 
@@ -114,6 +125,11 @@ impl BitXor for Signal {
             one_is!(Signal::High, a) if a != Signal::High => Signal::High,
             _ => Signal::Low,
         }
+    }
+}
+impl BitXorAssign for Signal {
+    fn bitxor_assign(&mut self, rhs: Self) {
+        *self = *self ^ rhs
     }
 }
 

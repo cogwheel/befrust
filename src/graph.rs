@@ -25,17 +25,31 @@ impl Pin {
         &self.name
     }
 
+    #[inline(always)]
     pub fn graph(&self) -> Graph {
         self.graph.clone()
     }
 
+    #[inline(always)]
     pub fn sig(&self) -> Signal {
-        self.graph.clone().get_signal(self)
+        self.graph().get_signal(self)
     }
-    // get_state(&self)
-    // get_signal(&self)
-    // set_state(&mut self)
-    // set_signal
+
+    #[inline(always)]
+    pub fn connect(&self, other: &Pin) {
+        self.graph().connect(self, other);
+    }
+
+    #[inline(always)]
+    pub fn connect_all(&self, others: &[&Pin]) {
+        self.graph().connect_all(others);
+        self.graph().connect(self, others[0]);
+    }
+
+    #[inline(always)]
+    pub fn set_output(&mut self, signal: Signal) {
+        self.graph().set_output(self, signal);
+    }
 }
 
 impl Debug for Pin {
@@ -135,7 +149,9 @@ impl GraphImpl {
     fn connect(&mut self, a: &Pin, b: &Pin) {
         let a_node_id = self.pin_nodes[a.id];
         let b_node_id = self.pin_nodes[b.id];
-        assert_ne!(a_node_id, b_node_id, "Already connected");
+        if a_node_id == b_node_id {
+            panic!("Already connected {:?} and {:?}", a.name(), b.name());
+        }
         // merge b into a
         let b_node = self.nodes.remove(&b_node_id).expect("Missing node");
         {
@@ -279,7 +295,7 @@ impl Graph {
 
     pub fn run(&mut self) -> RunStats {
         let mut stats = RunStats {
-            ticks: 0,
+            ticks: 1,
             updates: 0,
             cycle: 0,
         };
@@ -288,6 +304,14 @@ impl Graph {
         let mut state_hashes = BTreeMap::new();
 
         loop {
+            match self.tick() {
+                0 => break,
+                n => {
+                    stats.ticks += 1;
+                    stats.updates += n;
+                }
+            }
+
             let mut hash = DefaultHasher::new();
             self.g().pin_states.hash(&mut hash);
             self.g().nodes.hash(&mut hash);
@@ -295,14 +319,6 @@ impl Graph {
             if let Some(tick) = state_hashes.insert(hash.finish(), stats.ticks) {
                 stats.cycle = stats.ticks - tick - 1;
                 break;
-            }
-
-            match self.tick() {
-                0 => break,
-                n => {
-                    stats.ticks += 1;
-                    stats.updates += n;
-                }
             }
         }
 
@@ -322,7 +338,7 @@ impl Graph {
         self.get_state(pin).into()
     }
 
-    pub fn set_output(&mut self, pin: &Pin, signal: Signal) {
+    pub fn set_output(&mut self, pin: &mut Pin, signal: Signal) {
         let state = self.g().pin_states[pin.id];
         assert!(matches!(state, PinState::Output(_))); // TODO: maybe not?
         self.g().pin_states[pin.id] = PinState::Output(signal);
