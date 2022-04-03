@@ -1,10 +1,12 @@
+pub mod gate;
 pub mod graph;
-pub mod part;
+pub mod ic;
 
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
+pub use gate::*;
 pub use graph::*;
-pub use part::*;
+pub use ic::*;
 
 /// The logical value for a given node, pin, etc.
 ///
@@ -12,7 +14,7 @@ pub use part::*;
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Hash)]
 pub enum Signal {
     /// No signal present, high impedance, etc.
-    Off,
+    Off, // TODO: maybe rename something else less confusing with Low
 
     /// Logical Low (0, False, etc.)
     Low,

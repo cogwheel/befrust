@@ -1,4 +1,3 @@
-// TODO: rename this to gate.rs
 use crate::*;
 
 use derive_getters::Getters;

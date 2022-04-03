@@ -322,11 +322,6 @@ impl Graph {
             }
         }
 
-        println!(
-            "ticks: {}, updates: {}, cycle: {}",
-            stats.ticks, stats.updates, stats.cycle
-        );
-
         stats
     }
 
