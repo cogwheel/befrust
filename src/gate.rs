@@ -255,29 +255,33 @@ pub fn nor_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
 pub struct TristateBuffer(Vec<Pin>);
 
 impl TristateBuffer {
-    pub fn a(&self) -> &[Pin] { &self.0[self.width()..2*self.width()] }
+    pub fn a(&self) -> &[Pin] {
+        &self.0[self.width()..2 * self.width()]
+    }
 
-    pub fn q(&self) -> &[Pin] { &self.0[0..self.width()] }
+    pub fn q(&self) -> &[Pin] {
+        &self.0[0..self.width()]
+    }
 
-    pub fn en(&self) -> &Pin { &self.0.last().unwrap() }
+    pub fn en(&self) -> &Pin {
+        &self.0.last().unwrap()
+    }
 
-    pub fn width(&self) -> usize { (self.0.len() - 1) / 2 }
+    pub fn width(&self) -> usize {
+        (self.0.len() - 1) / 2
+    }
 
     pub fn new(graph: &mut Graph, name: &str, width: usize) -> Self {
         let mut states = vec![PinState::INPUT; 2 * width + 1];
         states[0..width].fill(PinState::HiZ);
 
-        TristateBuffer(graph.new_part(
-            name,
-            &states,
-            move |before, after| {
-                if before.last().unwrap().is_high() {
-                    after[0..width].copy_from_slice(&before[width..(2*width)])
-                } else {
-                    after[0..width].fill(PinState::HiZ)
-                }
+        TristateBuffer(graph.new_part(name, &states, move |before, after| {
+            if before.last().unwrap().is_high() {
+                after[0..width].copy_from_slice(&before[width..(2 * width)])
+            } else {
+                after[0..width].fill(PinState::HiZ)
             }
-        ))
+        }))
     }
 }
 

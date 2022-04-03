@@ -2,6 +2,7 @@ pub mod gate;
 pub mod graph;
 pub mod ic;
 
+use std::fmt::Debug;
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
 pub use gate::*;
@@ -46,42 +47,72 @@ pub trait ToSignal {
 }
 
 impl ToSignal for Signal {
-    fn sig(&self) -> Signal { *self }
+    fn sig(&self) -> Signal {
+        *self
+    }
 }
 
 // TODO: surely there's a magic way to do this
 impl ToSignal for &Signal {
-    fn sig(&self) -> Signal { **self }
+    fn sig(&self) -> Signal {
+        **self
+    }
+}
+
+#[derive(Debug)]
+pub struct BusValue {
+    val: usize,
+    error: usize,
+}
+
+impl BusValue {
+    pub fn new_val(val: usize) -> Self {
+        Self { val, error: 0 }
+    }
+
+    pub fn new_error(error: usize) -> Self {
+        Self { error, val: 0 }
+    }
+
+    pub fn unwrap(&self) -> usize {
+        assert_eq!(
+            self.error, 0,
+            "Attempting to unwrap BusValue with error_mask: {:#x}",
+            self.error
+        );
+
+        self.val
+    }
 }
 
 pub trait ToValue {
-    fn val(self) -> Result<usize, usize>;
+    fn val(self) -> BusValue;
 }
 
 impl ToValue for Signal {
-    fn val(self) -> Result<usize, usize> {
+    fn val(self) -> BusValue {
         match self {
-            Signal::Error => Err(1),
-            Signal::High => Ok(1),
-            _ => Ok(0)
+            Signal::Error => BusValue::new_error(1),
+            Signal::High => BusValue::new_val(1),
+            _ => BusValue::new_val(0),
         }
     }
 }
 
-impl<T> ToValue for T where
+impl<T> ToValue for T
+where
     T: Iterator,
     T::Item: ToSignal,
 {
-    fn val(self) -> Result<usize, usize> {
-        let mut val = 0;
-        let mut err = 0;
+    fn val(self) -> BusValue {
+        let mut bus_val = BusValue { val: 0, error: 0 };
         for (i, sig) in self.map(|x| x.sig()).enumerate() {
-            match sig.val() {
-                Ok(bit) => val += bit << i,
-                Err(_) => err += 1 << i,
-            }
+            let sig_val = sig.val();
+            bus_val.val += sig_val.val << i;
+            bus_val.error += sig_val.error << i;
         }
-        if err != 0 { Err(err) } else { Ok(val) }
+
+        bus_val
     }
 }
 
@@ -227,7 +258,9 @@ impl PinState {
         self.sig() == Signal::High
     }
 
-    pub fn val(&self) -> Result<usize, usize> { self.sig().val() }
+    pub fn val(&self) -> BusValue {
+        self.sig().val()
+    }
 }
 
 impl ToSignal for PinState {
@@ -290,7 +323,6 @@ impl BitXor for PinState {
     }
 }
 
-
 #[cfg(test)]
 #[test]
 pub fn test_bus_val() {
@@ -302,8 +334,11 @@ pub fn test_bus_val() {
 
     assert_eq!(sig_bus.iter().val(), Err(()));
 
-
-    let mut state_bus = [PinState::HiZ, PinState::Output(Signal::High), PinState::Output(Signal::Off)];
+    let mut state_bus = [
+        PinState::HiZ,
+        PinState::Output(Signal::High),
+        PinState::Output(Signal::Off),
+    ];
 
     assert_eq!(state_bus.iter().val(), Ok(2));
 

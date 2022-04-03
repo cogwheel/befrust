@@ -508,7 +508,10 @@ impl IcCY7C199 {
         let (io_out, _) = output_pins.split_at_mut(Self::WORD_SIZE);
 
         let data = before[Self::IO_START..Self::IO_END].iter().val().unwrap();
-        let addr = before[Self::ADDR_START..Self::ADDR_END].iter().val().unwrap();
+        let addr = before[Self::ADDR_START..Self::ADDR_END]
+            .iter()
+            .val()
+            .unwrap();
 
         if ce.is_lowish() || (oe.is_high() && we.is_high()) {
             Self::set_io(after, PinState::HiZ);
