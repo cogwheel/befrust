@@ -41,6 +41,50 @@ impl Signal {
     }
 }
 
+pub trait ToSignal {
+    fn sig(&self) -> Signal;
+}
+
+impl ToSignal for Signal {
+    fn sig(&self) -> Signal { *self }
+}
+
+// TODO: surely there's a magic way to do this
+impl ToSignal for &Signal {
+    fn sig(&self) -> Signal { **self }
+}
+
+pub trait ToValue {
+    fn val(self) -> Result<usize, usize>;
+}
+
+impl ToValue for Signal {
+    fn val(self) -> Result<usize, usize> {
+        match self {
+            Signal::Error => Err(1),
+            Signal::High => Ok(1),
+            _ => Ok(0)
+        }
+    }
+}
+
+impl<T> ToValue for T where
+    T: Iterator,
+    T::Item: ToSignal,
+{
+    fn val(self) -> Result<usize, usize> {
+        let mut val = 0;
+        let mut err = 0;
+        for (i, sig) in self.map(|x| x.sig()).enumerate() {
+            match sig.val() {
+                Ok(bit) => val += bit << i,
+                Err(_) => err += 1 << i,
+            }
+        }
+        if err != 0 { Err(err) } else { Ok(val) }
+    }
+}
+
 impl Default for Signal {
     /// The default is Error to make it more obvious when things have not been connected correctly
     fn default() -> Signal {
@@ -173,24 +217,32 @@ impl PinState {
     /// Shorthand for a default output. Error until the Part's updater runs.
     pub const OUTPUT: PinState = PinState::Output(Signal::Error);
 
-    /// Get the logical signal for the PinState
-    ///
-    /// TODO: should this be q()?
-    pub fn sig(self) -> Signal {
-        match self {
-            PinState::HiZ => Signal::Off,
-            PinState::Input(signal) | PinState::Output(signal) => signal,
-        }
-    }
-
     /// Helper for treating Off the same as Low
-    pub fn is_lowish(self) -> bool {
+    pub fn is_lowish(&self) -> bool {
         [Signal::Low, Signal::Off].contains(&self.sig())
     }
 
     /// TODO: add others?
-    pub fn is_high(self) -> bool {
+    pub fn is_high(&self) -> bool {
         self.sig() == Signal::High
+    }
+
+    pub fn val(&self) -> Result<usize, usize> { self.sig().val() }
+}
+
+impl ToSignal for PinState {
+    /// Get the logical signal for the PinState
+    fn sig(&self) -> Signal {
+        match self {
+            PinState::HiZ => Signal::Off,
+            PinState::Input(signal) | PinState::Output(signal) => *signal,
+        }
+    }
+}
+
+impl ToSignal for &PinState {
+    fn sig(&self) -> Signal {
+        (*self).sig()
     }
 }
 
@@ -236,6 +288,28 @@ impl BitXor for PinState {
     fn bitxor(self, rhs: Self) -> Signal {
         self.sig() ^ rhs.sig()
     }
+}
+
+
+#[cfg(test)]
+#[test]
+pub fn test_bus_val() {
+    let mut sig_bus = [Signal::High; 5];
+
+    assert_eq!(sig_bus.iter().val(), Ok(31));
+
+    sig_bus[2] = Signal::Error;
+
+    assert_eq!(sig_bus.iter().val(), Err(()));
+
+
+    let mut state_bus = [PinState::HiZ, PinState::Output(Signal::High), PinState::Output(Signal::Off)];
+
+    assert_eq!(state_bus.iter().val(), Ok(2));
+
+    state_bus[0] = PinState::Output(Signal::Error);
+
+    assert_eq!(state_bus.iter().val(), Err(()));
 }
 
 #[cfg(test)]

@@ -31,11 +31,6 @@ impl Pin {
     }
 
     #[inline(always)]
-    pub fn sig(&self) -> Signal {
-        self.graph().get_signal(self)
-    }
-
-    #[inline(always)]
     pub fn state(&self) -> PinState {
         self.graph().get_state(self)
     }
@@ -59,6 +54,24 @@ impl Pin {
     #[inline(always)]
     pub fn flash_output(&mut self) {
         self.graph().flash_output(self);
+    }
+}
+
+impl ToSignal for Pin {
+    fn sig(&self) -> Signal {
+        self.graph.clone().get_signal(self)
+    }
+}
+
+impl ToSignal for &Pin {
+    fn sig(&self) -> Signal {
+        (*self).sig()
+    }
+}
+
+impl ToSignal for &&Pin {
+    fn sig(&self) -> Signal {
+        (**self).sig()
     }
 }
 
@@ -228,6 +241,8 @@ impl GraphImpl {
 }
 
 impl Graph {
+    // TODO: use IntoIter for sequence interfaces; impl IntoIter for &[&Pin]
+
     pub fn new() -> Self {
         Self(Rc::new(RefCell::new(GraphImpl::default())))
     }

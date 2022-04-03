@@ -71,9 +71,21 @@ pub fn and_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     })
 }
 
+pub fn nand_gate(graph: &mut Graph, name: &str) -> BinaryGate {
+    BinaryGate::new(graph, name, |before, after| {
+        after[BinaryGate::Q] = PinState::Output(!(before[BinaryGate::A] & before[BinaryGate::B]));
+    })
+}
+
 pub fn or_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     BinaryGate::new(graph, name, |before, after| {
         after[BinaryGate::Q] = PinState::Output(before[BinaryGate::A] | before[BinaryGate::B]);
+    })
+}
+
+pub fn nor_gate(graph: &mut Graph, name: &str) -> BinaryGate {
+    BinaryGate::new(graph, name, |before, after| {
+        after[BinaryGate::Q] = PinState::Output(!(before[BinaryGate::A] | before[BinaryGate::B]));
     })
 }
 
@@ -198,8 +210,20 @@ impl NaryGate {
 pub fn and_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
     NaryGate::new(graph, name, inputs, |before, after| {
         let mut result = before[1].sig();
+        // No shortcut in case of Errors
         for state in &before[2..] {
             result &= state.sig();
+        }
+
+        after[0] = PinState::Output(result);
+    })
+}
+
+pub fn or_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
+    NaryGate::new(graph, name, inputs, |before, after| {
+        let mut result = before[1].sig();
+        for state in &before[2..] {
+            result |= state.sig();
         }
 
         after[0] = PinState::Output(result);
@@ -215,6 +239,46 @@ pub fn nand_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
 
         after[0] = PinState::Output(!result);
     })
+}
+
+pub fn nor_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
+    NaryGate::new(graph, name, inputs, |before, after| {
+        let mut result = before[1].sig();
+        for state in &before[2..] {
+            result |= state.sig();
+        }
+
+        after[0] = PinState::Output(!result);
+    })
+}
+
+pub struct TristateBuffer(Vec<Pin>);
+
+impl TristateBuffer {
+    pub fn a(&self) -> &[Pin] { &self.0[self.width()..2*self.width()] }
+
+    pub fn q(&self) -> &[Pin] { &self.0[0..self.width()] }
+
+    pub fn en(&self) -> &Pin { &self.0.last().unwrap() }
+
+    pub fn width(&self) -> usize { (self.0.len() - 1) / 2 }
+
+    pub fn new(graph: &mut Graph, name: &str, width: usize) -> Self {
+        let mut states = vec![PinState::INPUT; 2 * width + 1];
+        states[0..width].fill(PinState::HiZ);
+
+        TristateBuffer(graph.new_part(
+            name,
+            &states,
+            move |before, after| {
+                if before.last().unwrap().is_high() {
+                    after[0..width].copy_from_slice(&before[width..(2*width)])
+                } else {
+                    after[0..width].fill(PinState::HiZ)
+                }
+            }
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -263,9 +327,9 @@ mod test_gates {
     fn test_and_gate() {
         let mut graph = Graph::new();
 
-        let high = graph.new_output("a", Signal::High);
-        let low = graph.new_output("a", Signal::Low);
-        let high2 = graph.new_output("a", Signal::High);
+        let high = graph.new_output("high", Signal::High);
+        let low = graph.new_output("low", Signal::Low);
+        let high2 = graph.new_output("high2", Signal::High);
 
         let high_and_low = and_gate(&mut graph, "and1");
         let high_and_high = and_gate(&mut graph, "and2");
@@ -300,6 +364,27 @@ mod test_gates {
         graph.run();
 
         assert_low!(andy.q());
+    }
+
+    #[test]
+    fn test_nand_gate() {
+        let mut graph = Graph::new();
+
+        let high = graph.new_output("high", Signal::High);
+        let low = graph.new_output("low", Signal::Low);
+        let high2 = graph.new_output("high2", Signal::High);
+
+        let high_nand_low = nand_gate(&mut graph, "nand1");
+        let high_nand_high = nand_gate(&mut graph, "nand2");
+
+        graph.connect_all(&[&high, high_nand_low.a(), high_nand_high.a()]);
+        graph.connect(&low, high_nand_low.b());
+        graph.connect(&high2, high_nand_high.b());
+
+        graph.run();
+
+        assert_high!(high_nand_low.q());
+        assert_low!(high_nand_high.q());
     }
 
     #[test]
