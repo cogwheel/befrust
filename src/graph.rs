@@ -50,6 +50,11 @@ impl Pin {
     pub fn set_output(&mut self, signal: Signal) {
         self.graph().set_output(self, signal);
     }
+
+    #[inline(always)]
+    pub fn flash_output(&mut self) {
+        self.graph().flash_output(self);
+    }
 }
 
 impl Debug for Pin {
@@ -218,8 +223,8 @@ impl GraphImpl {
 }
 
 impl Graph {
-    pub fn new() -> Graph {
-        Graph(Rc::new(RefCell::new(GraphImpl::default())))
+    pub fn new() -> Self {
+        Self(Rc::new(RefCell::new(GraphImpl::default())))
     }
 
     fn g(&self) -> RefMut<GraphImpl> {
@@ -244,6 +249,12 @@ impl Graph {
 
     pub fn connect(&mut self, a: &Pin, b: &Pin) {
         self.g().connect(a, b);
+    }
+
+    pub fn connect_pairs(&mut self, pairs: &[(&Pin, &Pin)]) {
+        for (one, other) in pairs.iter() {
+            self.connect(one, other);
+        }
     }
 
     pub fn connect_all(&mut self, pins: &[&Pin]) {
@@ -335,8 +346,22 @@ impl Graph {
 
     pub fn set_output(&mut self, pin: &mut Pin, signal: Signal) {
         let state = self.g().pin_states[pin.id];
-        assert!(matches!(state, PinState::Output(_))); // TODO: maybe not?
+        assert!(matches!(state, PinState::Output(_)));
+
         self.g().pin_states[pin.id] = PinState::Output(signal);
+    }
+
+    /// Flips the state of the given output pin for one tick
+    pub fn flash_output(&mut self, pin: &mut Pin) -> usize {
+        let state = self.g().pin_states[pin.id];
+        assert!(matches!(state, PinState::Output(_)));
+
+        let signal = state.sig();
+        self.g().pin_states[pin.id] = PinState::Output(!signal);
+        let updates = self.tick();
+        self.g().pin_states[pin.id] = PinState::Output(signal);
+
+        updates
     }
 }
 

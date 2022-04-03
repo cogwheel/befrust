@@ -21,7 +21,7 @@ impl TFlipFlop {
     // internal
     const T_PREV: usize = 5;
 
-    pub fn new(graph: &mut Graph, name: &str) -> TFlipFlop {
+    pub fn new(graph: &mut Graph, name: &str) -> Self {
         let pins = graph.new_part(
             name,
             &[
@@ -47,7 +47,7 @@ impl TFlipFlop {
                 after[Self::T_PREV] = before[Self::T];
             },
         );
-        TFlipFlop {
+        Self {
             t: pins[Self::T].clone(),
             s: pins[Self::S].clone(),
             r: pins[Self::R].clone(),
@@ -78,7 +78,7 @@ impl HalfAdder {
         self.flip_flop.q_inv()
     }
 
-    pub fn new(graph: &mut Graph, name: &str) -> HalfAdder {
+    pub fn new(graph: &mut Graph, name: &str) -> Self {
         let d = graph.new_input(&format!("{}.d", name));
         let clear = graph.new_input(&format!("{}.clear", name));
         let load = graph.new_input(&format!("{}.load", name));
@@ -93,7 +93,7 @@ impl HalfAdder {
         graph.connect(&set, flip_flop.s());
         graph.connect(&reset_ff, flip_flop.r());
 
-        HalfAdder {
+        Self {
             d,
             clear,
             load,
@@ -132,8 +132,8 @@ impl FullAdder {
         self.half_adder.q_inv()
     }
 
-    pub fn new(graph: &mut Graph, name: &str) -> FullAdder {
-        let adder = FullAdder {
+    pub fn new(graph: &mut Graph, name: &str) -> Self {
+        let adder = Self {
             up: graph.new_input(&format!("{}.up", name)),
             down: graph.new_input(&format!("{}.down", name)),
             up_cond: graph.new_input(&format!("{}.up_cond", name)),
@@ -204,7 +204,7 @@ impl Ic74193 {
         self.adder4.q()
     }
 
-    pub fn new(graph: &mut Graph, name: &str) -> Ic74193 {
+    pub fn new(graph: &mut Graph, name: &str) -> Self {
         let up_inv = not_gate(graph, &format!("{}.up_inv", name));
         let down_inv = not_gate(graph, &format!("{}.down_inv", name));
         let load = not_gate(graph, &format!("{}.load", name));
@@ -263,7 +263,7 @@ impl Ic74193 {
             adder4.clear(),
         ]);
 
-        Ic74193 {
+        Self {
             up: up_inv.a().clone(),
             down: down_inv.a().clone(),
             load_inv: load.a().clone(),
@@ -278,9 +278,174 @@ impl Ic74193 {
     }
 }
 
+pub struct Counter8Bit {
+    counter1: Ic74193,
+    counter2: Ic74193,
+}
+
+impl Counter8Bit {
+    pub fn d(&self) -> [&Pin; 8] {
+        [
+            // TODO: should these be little-endian instead?
+            self.counter1.d1(),
+            self.counter1.d2(),
+            self.counter1.d3(),
+            self.counter1.d4(),
+            self.counter2.d1(),
+            self.counter2.d2(),
+            self.counter2.d3(),
+            self.counter2.d4(),
+        ]
+    }
+
+    pub fn up(&self) -> &Pin {
+        self.counter1.up()
+    }
+
+    pub fn down(&self) -> &Pin {
+        self.counter1.down()
+    }
+
+    pub fn load_inv(&self) -> &Pin {
+        self.counter1.load_inv()
+    }
+
+    pub fn clear(&self) -> &Pin {
+        self.counter1.clear()
+    }
+
+    pub fn q(&self) -> [&Pin; 8] {
+        [
+            self.counter1.q1(),
+            self.counter1.q2(),
+            self.counter1.q3(),
+            self.counter1.q4(),
+            self.counter2.q1(),
+            self.counter2.q2(),
+            self.counter2.q3(),
+            self.counter2.q4(),
+        ]
+    }
+
+    pub fn carry(&self) -> &Pin {
+        self.counter2.carry()
+    }
+
+    pub fn borrow(&self) -> &Pin {
+        self.counter2.borrow()
+    }
+
+    pub fn new(graph: &mut Graph, name: &str) -> Self {
+        let counter1 = Ic74193::new(graph, &format!("{}.counter1", name));
+        let counter2 = Ic74193::new(graph, &format!("{}.counter2", name));
+
+        graph.connect_pairs(&[
+            (counter1.carry(), counter2.up()),
+            (counter1.borrow(), counter2.down()),
+            (counter1.load_inv(), counter2.load_inv()),
+            (counter1.clear(), counter2.clear()),
+        ]);
+
+        Self { counter1, counter2 }
+    }
+}
+
+/// A 16-bit counter built from Ic74193s
+///
+/// Note: this would be a lot more efficient as a straight up part with its own update function to
+/// do the math outside the simulation, but that kind of misses the point ;)
+pub struct Counter16Bit {
+    counter1: Counter8Bit,
+    counter2: Counter8Bit,
+}
+
+impl Counter16Bit {
+    pub fn d(&self) -> [&Pin; 16] {
+        [
+            // TODO: unghh... there is probably a macro that can help
+            &self.counter1.d()[0],
+            &self.counter1.d()[1],
+            &self.counter1.d()[2],
+            &self.counter1.d()[3],
+            &self.counter1.d()[4],
+            &self.counter1.d()[5],
+            &self.counter1.d()[6],
+            &self.counter1.d()[7],
+            &self.counter2.d()[0],
+            &self.counter2.d()[1],
+            &self.counter2.d()[2],
+            &self.counter2.d()[3],
+            &self.counter2.d()[4],
+            &self.counter2.d()[5],
+            &self.counter2.d()[6],
+            &self.counter2.d()[7],
+        ]
+    }
+
+    pub fn up(&self) -> &Pin {
+        self.counter1.up()
+    }
+
+    pub fn down(&self) -> &Pin {
+        self.counter1.down()
+    }
+
+    pub fn load_inv(&self) -> &Pin {
+        self.counter1.load_inv()
+    }
+
+    pub fn clear(&self) -> &Pin {
+        self.counter1.clear()
+    }
+
+    pub fn q(&self) -> [&Pin; 16] {
+        [
+            &self.counter1.q()[0],
+            &self.counter1.q()[1],
+            &self.counter1.q()[2],
+            &self.counter1.q()[3],
+            &self.counter1.q()[4],
+            &self.counter1.q()[5],
+            &self.counter1.q()[6],
+            &self.counter1.q()[7],
+            &self.counter2.q()[0],
+            &self.counter2.q()[1],
+            &self.counter2.q()[2],
+            &self.counter2.q()[3],
+            &self.counter2.q()[4],
+            &self.counter2.q()[5],
+            &self.counter2.q()[6],
+            &self.counter2.q()[7],
+        ]
+    }
+
+    pub fn carry(&self) -> &Pin {
+        self.counter2.carry()
+    }
+
+    pub fn borrow(&self) -> &Pin {
+        self.counter2.borrow()
+    }
+
+    pub fn new(graph: &mut Graph, name: &str) -> Self {
+        let counter1 = Counter8Bit::new(graph, &format!("{}.counter1", name));
+        let counter2 = Counter8Bit::new(graph, &format!("{}.counter2", name));
+
+        graph.connect_pairs(&[
+            (counter1.carry(), counter2.up()),
+            (counter1.borrow(), counter2.down()),
+            (counter1.load_inv(), counter2.load_inv()),
+            (counter1.clear(), counter2.clear()),
+        ]);
+
+        Self { counter1, counter2 }
+    }
+}
+
 #[cfg(test)]
 mod test_counter {
     use crate::*;
+    use std::iter::zip;
 
     #[test]
     pub fn test_load() {
@@ -424,6 +589,171 @@ mod test_counter {
                 counter2.q2().sig(),
                 counter2.q3().sig(),
                 counter2.q4().sig(),
+            ],
+        );
+    }
+
+    fn assert_sigs(pins: &[&Pin], sigs: &[Signal]) {
+        assert_eq!(pins.len(), sigs.len());
+        for (pin, sig) in zip(pins, sigs) {
+            assert_eq!(pin.sig(), *sig, "{:?}", pin);
+        }
+    }
+
+    #[test]
+    pub fn test_counter_8bit() {
+        let mut graph = Graph::new();
+
+        let mut up = graph.new_output("up", Signal::High);
+        let mut down = graph.new_output("down", Signal::High);
+        let mut clear = graph.new_output("clear", Signal::High);
+        let load_inv = graph.new_output("load_inv", Signal::High);
+
+        let counter = Counter8Bit::new(&mut graph, "counter");
+
+        graph.connect_pairs(&[
+            (&up, counter.up()),
+            (&down, counter.down()),
+            (&clear, counter.clear()),
+            (&load_inv, counter.load_inv()),
+        ]);
+
+        graph.run();
+        clear.set_output(Signal::Low);
+        graph.run();
+        assert_sigs(
+            &counter.q(),
+            &[
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+            ],
+        );
+
+        up.set_output(Signal::Low);
+        graph.run();
+        up.set_output(Signal::High);
+        graph.run();
+
+        up.flash_output();
+        graph.run();
+
+        assert_sigs(
+            &counter.q(),
+            &[
+                Signal::Low,
+                Signal::High,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+            ],
+        );
+
+        for _ in 1..10 {
+            down.flash_output();
+            graph.run();
+        }
+
+        assert_sigs(
+            &counter.q(),
+            &[
+                Signal::High,
+                Signal::Low,
+                Signal::Low,
+                Signal::High,
+                Signal::High,
+                Signal::High,
+                Signal::High,
+                Signal::High,
+            ],
+        );
+    }
+
+    #[test]
+    pub fn test_counter_16bit() {
+        let mut graph = Graph::new();
+
+        let mut up = graph.new_output("up", Signal::High);
+        let mut down = graph.new_output("down", Signal::High);
+        let mut clear = graph.new_output("clear", Signal::High);
+        let load_inv = graph.new_output("load_inv", Signal::High);
+
+        let counter = Counter16Bit::new(&mut graph, "counter");
+
+        graph.connect_pairs(&[
+            (&up, counter.up()),
+            (&down, counter.down()),
+            (&clear, counter.clear()),
+            (&load_inv, counter.load_inv()),
+        ]);
+
+        graph.run();
+        clear.set_output(Signal::Low);
+        graph.run();
+        assert_sigs(&counter.q(), &[Signal::Low; 16]);
+
+        up.set_output(Signal::Low);
+        graph.run();
+        up.set_output(Signal::High);
+        graph.run();
+
+        up.flash_output();
+        graph.run();
+
+        assert_sigs(
+            &counter.q(),
+            &[
+                Signal::Low,
+                Signal::High,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+                Signal::Low,
+            ],
+        );
+
+        for _ in 1..10 {
+            down.flash_output();
+            graph.run();
+        }
+
+        assert_sigs(
+            &counter.q(),
+            &[
+                Signal::High,
+                Signal::Low,
+                Signal::Low,
+                Signal::High,
+                Signal::High,
+                Signal::High,
+                Signal::High,
+                Signal::High,
+                Signal::High,
+                Signal::High,
+                Signal::High,
+                Signal::High,
+                Signal::High,
+                Signal::High,
+                Signal::High,
+                Signal::High,
             ],
         );
     }
