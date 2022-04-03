@@ -227,6 +227,8 @@ impl GraphImpl {
     }
 
     pub fn update_parts(&mut self) {
+        // TODO: swap then clone; use this to communicate previous states (instead of needing
+        //   separate prev pins)
         self.back_buffer.clone_from(&self.pin_states);
         for (part, pin_range) in self.parts.iter_mut() {
             let start = pin_range.start;

@@ -59,7 +59,7 @@ impl ToSignal for &Signal {
     }
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub struct BusValue {
     val: usize,
     error: usize,
@@ -82,6 +82,16 @@ impl BusValue {
         );
 
         self.val
+    }
+
+    pub fn sig(&self, i: usize) -> Signal {
+        if (self.error >> i) & 1 == 1 {
+            Signal::Error
+        } else if (self.val >> i ) & 1 == 1 {
+            Signal::High
+        } else {
+            Signal::Low
+        }
     }
 }
 
@@ -107,6 +117,12 @@ where
     fn val(self) -> BusValue {
         let mut bus_val = BusValue { val: 0, error: 0 };
         for (i, sig) in self.map(|x| x.sig()).enumerate() {
+            assert_ne!(
+                i as u32,
+                usize::BITS,
+                "Bus has more than usize::BITS ({}) bits",
+                usize::BITS
+            );
             let sig_val = sig.val();
             bus_val.val += sig_val.val << i;
             bus_val.error += sig_val.error << i;
@@ -328,11 +344,11 @@ impl BitXor for PinState {
 pub fn test_bus_val() {
     let mut sig_bus = [Signal::High; 5];
 
-    assert_eq!(sig_bus.iter().val(), Ok(31));
+    assert_eq!(sig_bus.iter().val(), BusValue::new_val(31));
 
     sig_bus[2] = Signal::Error;
 
-    assert_eq!(sig_bus.iter().val(), Err(()));
+    assert_eq!(sig_bus.iter().val(), BusValue{ val: 27, error: 4 });
 
     let mut state_bus = [
         PinState::HiZ,
@@ -340,11 +356,11 @@ pub fn test_bus_val() {
         PinState::Output(Signal::Off),
     ];
 
-    assert_eq!(state_bus.iter().val(), Ok(2));
+    assert_eq!(state_bus.iter().val(), BusValue::new_val(2));
 
     state_bus[0] = PinState::Output(Signal::Error);
 
-    assert_eq!(state_bus.iter().val(), Err(()));
+    assert_eq!(state_bus.iter().val(), BusValue{ val: 2, error: 1 });
 }
 
 #[cfg(test)]
