@@ -1,4 +1,3 @@
-// TODO: rename this to gate.rs
 use crate::*;
 
 use derive_getters::Getters;
@@ -13,12 +12,12 @@ impl UnaryGate {
     pub const A: usize = 0;
     pub const Q: usize = 1;
 
-    pub fn new<F>(graph: &mut Graph, name: &str, updater: F) -> UnaryGate
+    pub fn new<F>(graph: &mut Graph, name: &str, updater: F) -> Self
     where
         F: 'static + Fn(&[PinState], &mut [PinState]),
     {
         let pins = graph.new_part(name, &[PinState::INPUT, PinState::OUTPUT], updater);
-        UnaryGate {
+        Self {
             a: pins[Self::A].clone(),
             q: pins[Self::Q].clone(),
         }
@@ -49,7 +48,7 @@ impl BinaryGate {
     pub const B: usize = 1;
     pub const Q: usize = 2;
 
-    pub fn new<F>(graph: &mut Graph, name: &str, updater: F) -> BinaryGate
+    pub fn new<F>(graph: &mut Graph, name: &str, updater: F) -> Self
     where
         F: 'static + Fn(&[PinState], &mut [PinState]),
     {
@@ -58,7 +57,7 @@ impl BinaryGate {
             &[PinState::INPUT, PinState::INPUT, PinState::OUTPUT],
             updater,
         );
-        BinaryGate {
+        Self {
             a: pins[Self::A].clone(),
             b: pins[Self::B].clone(),
             q: pins[Self::Q].clone(),
@@ -180,13 +179,13 @@ impl NaryGate {
         &self.0[0]
     }
 
-    pub fn new<F>(graph: &mut Graph, name: &str, inputs: usize, updater: F) -> NaryGate
+    pub fn new<F>(graph: &mut Graph, name: &str, inputs: usize, updater: F) -> Self
     where
         F: 'static + Fn(&[PinState], &mut [PinState]),
     {
         let mut states = vec![PinState::INPUT; inputs + 1];
         states[0] = PinState::OUTPUT;
-        NaryGate(graph.new_part(name, &states, updater))
+        Self(graph.new_part(name, &states, updater))
     }
 
     pub fn connect_inputs(&self, pins: &[&Pin]) {
