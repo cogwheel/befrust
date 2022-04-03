@@ -442,6 +442,108 @@ impl Counter16Bit {
     }
 }
 
+pub struct IcCY7C199(Vec<Pin>);
+
+impl IcCY7C199 {
+    const CE_INV: usize = 0;
+    const OE_INV: usize = 1;
+    const WE_INV: usize = 2;
+
+    const IO_START: usize = 3;
+    const WORD_SIZE: usize = 8;
+    const IO_END: usize = Self::IO_START + Self::WORD_SIZE;
+
+    const ADDR_START: usize = Self::IO_END;
+    const ADDR_SIZE: usize = 15;
+    const ADDR_END: usize = Self::ADDR_START + Self::ADDR_SIZE;
+
+    const NUM_PINS: usize = Self::ADDR_END;
+
+    const NUM_WORDS: usize = 1 << Self::ADDR_SIZE;
+
+    pub fn ce_inv(&self) -> &Pin {
+        &self.0[Self::CE_INV]
+    }
+
+    pub fn oe_inv(&self) -> &Pin {
+        &self.0[Self::OE_INV]
+    }
+
+    pub fn we_inv(&self) -> &Pin {
+        &self.0[Self::WE_INV]
+    }
+
+    pub fn d(&self) -> &[Pin] {
+        &self.0[Self::IO_START..Self::IO_END]
+    }
+
+    pub fn a(&self) -> &[Pin] {
+        &self.0[Self::ADDR_START..Self::ADDR_END]
+    }
+
+    pub fn new(graph: &mut Graph, name: &str) -> Self {
+        let mut states = [PinState::INPUT; Self::NUM_PINS];
+        Self::set_io(&mut states, PinState::HiZ);
+
+        // TODO: randomize
+        let mut ram = vec![0xff; Self::NUM_WORDS];
+
+        let pins = graph.new_part(name, &states, move |before, after| {
+            Self::update(&mut ram, before, after);
+        });
+
+        Self(pins)
+    }
+
+    fn set_io(states: &mut [PinState], val: PinState) {
+        states[Self::IO_START..Self::IO_END].fill(val);
+    }
+
+    fn update(ram: &mut Vec<u8>, before: &[PinState], after: &mut [PinState]) {
+        let ce = !before[Self::CE_INV];
+        let oe = !before[Self::OE_INV];
+        let we = !before[Self::WE_INV];
+
+        if ce.is_lowish() || (oe.is_high() && we.is_high()) {
+            Self::set_io(after, PinState::HiZ);
+        } else if oe.is_high() {
+            let addr = Self::get_val(&before[Self::ADDR_START..Self::ADDR_END]);
+            let data = ram[addr];
+            Self::set_output(&mut after[Self::IO_START..Self::IO_END], data as usize);
+        } else if we.is_high() {
+            let addr = Self::get_val(&before[Self::ADDR_START..Self::ADDR_END]);
+            let data = Self::get_val(&before[Self::IO_START..Self::IO_END]);
+            ram[addr] = data as u8;
+            Self::set_input(&mut after[Self::IO_START..Self::IO_END], data);
+        }
+    }
+
+    fn get_val(pins: &[PinState]) -> usize {
+        let mut val = 0;
+        for (i, state) in pins.iter().enumerate() {
+            let bit = if state.is_high() { 1 } else { 0 };
+            val += bit << i;
+        }
+        val
+    }
+
+    fn set_output(pins: &mut [PinState], val: usize) {
+        for (i, state) in pins.iter_mut().enumerate() {
+            let bit = val & (1 << i);
+            let signal = if bit == 0 { Signal::Low } else { Signal::High };
+            *state = PinState::Output(signal)
+        }
+    }
+
+    fn set_input(pins: &mut [PinState], val: usize) {
+        for (i, state) in pins.iter_mut().enumerate() {
+            let bit = val & (1 << i);
+            let signal = if bit == 0 { Signal::Low } else { Signal::High };
+            *state = PinState::Input(signal)
+        }
+    }
+}
+
 #[cfg(test)]
 mod test_counter {
     use crate::*;
@@ -756,5 +858,95 @@ mod test_counter {
                 Signal::High,
             ],
         );
+    }
+}
+
+#[cfg(test)]
+mod test_ram {
+    use crate::*;
+    use std::iter::zip;
+
+    fn assert_states(pins: &[Pin], states: &[PinState]) {
+        assert_eq!(pins.len(), states.len());
+        for (pin, state) in zip(pins, states) {
+            assert_eq!(pin.state(), *state, "{:?}", pin);
+        }
+    }
+
+    fn assert_inputs(pins: &[Pin]) {
+        for pin in pins {
+            assert!(matches!(pin.state(), PinState::Input(_)));
+        }
+    }
+
+    fn assert_outputs(pins: &[Pin]) {
+        for pin in pins {
+            assert!(matches!(pin.state(), PinState::Output(_)));
+        }
+    }
+
+    #[test]
+    pub fn test_read_write() {
+        let mut graph = Graph::new();
+
+        let ram = IcCY7C199::new(&mut graph, "d_ram");
+
+        graph.run();
+        assert_states(ram.d(), &[PinState::HiZ; 8]);
+
+        let ce_inv = graph.new_output("ce_inv", Signal::Low);
+        let mut oe_inv = graph.new_output("oe_inv", Signal::Low);
+        let mut we_inv = graph.new_output("we_inv", Signal::High);
+        graph.connect_pairs(&[
+            (&ce_inv, ram.ce_inv()),
+            (&oe_inv, ram.oe_inv()),
+            (&we_inv, ram.we_inv()),
+        ]);
+
+        graph.run();
+
+        assert_outputs(ram.d());
+
+        let mut d = graph.new_pins("d", &[PinState::Output(Signal::Low); 8]);
+        for (one, other) in zip(&d, ram.d()) {
+            graph.connect(one, other);
+        }
+
+        oe_inv.set_output(Signal::High);
+        graph.run();
+
+        we_inv.set_output(Signal::Low);
+        graph.run();
+
+        assert_inputs(ram.d());
+
+        we_inv.set_output(Signal::High);
+        oe_inv.set_output(Signal::Low);
+        graph.run();
+
+        let mut expected_outputs = [PinState::Output(Signal::Low); 8];
+        assert_states(ram.d(), &expected_outputs);
+
+        d[2].set_output(Signal::High);
+        expected_outputs[2] = PinState::Output(Signal::High);
+        oe_inv.set_output(Signal::High);
+        we_inv.set_output(Signal::Low);
+        graph.run();
+        we_inv.set_output(Signal::High);
+        oe_inv.set_output(Signal::Low);
+        graph.run();
+
+        assert_states(ram.d(), &expected_outputs);
+
+        let mut a2 = graph.new_output("a2", Signal::High);
+        graph.connect(&a2, &ram.a()[2]);
+        graph.run();
+
+        assert_states(ram.d(), &[PinState::Output(Signal::High); 8]);
+
+        a2.set_output(Signal::Low);
+        graph.run();
+
+        assert_states(ram.d(), &expected_outputs);
     }
 }

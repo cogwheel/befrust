@@ -28,6 +28,19 @@ pub enum Signal {
     Error,
 }
 
+impl Signal {
+    fn is_lowish(&self) -> bool {
+        match self {
+            Signal::Low | Signal::Off => true,
+            _ => false,
+        }
+    }
+
+    fn is_high(&self) -> bool {
+        *self == Signal::High
+    }
+}
+
 impl Default for Signal {
     /// The default is Error to make it more obvious when things have not been connected correctly
     fn default() -> Signal {
