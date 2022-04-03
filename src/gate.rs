@@ -14,7 +14,7 @@ impl UnaryGate {
 
     pub fn new<F>(graph: &mut Graph, name: &str, updater: F) -> Self
     where
-        F: 'static + Fn(&[PinState], &mut [PinState]),
+        F: 'static + FnMut(&[PinState], &mut [PinState]),
     {
         let pins = graph.new_part(name, &[PinState::INPUT, PinState::OUTPUT], updater);
         Self {
@@ -50,7 +50,7 @@ impl BinaryGate {
 
     pub fn new<F>(graph: &mut Graph, name: &str, updater: F) -> Self
     where
-        F: 'static + Fn(&[PinState], &mut [PinState]),
+        F: 'static + FnMut(&[PinState], &mut [PinState]),
     {
         let pins = graph.new_part(
             name,
@@ -181,7 +181,7 @@ impl NaryGate {
 
     pub fn new<F>(graph: &mut Graph, name: &str, inputs: usize, updater: F) -> Self
     where
-        F: 'static + Fn(&[PinState], &mut [PinState]),
+        F: 'static + FnMut(&[PinState], &mut [PinState]),
     {
         let mut states = vec![PinState::INPUT; inputs + 1];
         states[0] = PinState::OUTPUT;

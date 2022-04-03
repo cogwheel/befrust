@@ -36,6 +36,11 @@ impl Pin {
     }
 
     #[inline(always)]
+    pub fn state(&self) -> PinState {
+        self.graph().get_state(self)
+    }
+
+    #[inline(always)]
     pub fn connect(&self, other: &Pin) {
         self.graph().connect(self, other);
     }
@@ -85,7 +90,7 @@ impl Node {
 /// A set of pins with an update function
 ///
 /// The update function is called each tick with the "before" and "after" states for the pins
-type Part = Box<dyn Fn(&[PinState], &mut [PinState])>;
+type Part = Box<dyn FnMut(&[PinState], &mut [PinState])>;
 
 /// The interface to the befrust compute graph
 ///
@@ -280,7 +285,7 @@ impl Graph {
     /// TODO: take (name, state) pairs
     pub fn new_part<F>(&mut self, name: &str, new_states: &[PinState], updater: F) -> Vec<Pin>
     where
-        F: 'static + Fn(&[PinState], &mut [PinState]),
+        F: 'static + FnMut(&[PinState], &mut [PinState]),
     {
         let start = self.g().pin_states.len();
         let end = start + new_states.len();
