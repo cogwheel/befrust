@@ -13,7 +13,7 @@ pub struct DataBlock {
     reset: Pin,
 
     #[getter(skip)]
-    bus: Vec<Pin>,
+    bus: Buffer,
 
     #[getter(skip)]
     ptr: Counter16Bit,
@@ -24,7 +24,7 @@ pub struct DataBlock {
 
 impl DataBlock {
     pub fn d(&self) -> &[Pin] {
-        &self.bus[8..16]
+        &self.bus.q()
     }
 
     pub fn zero(&self) -> &Pin {
@@ -45,23 +45,14 @@ impl DataBlock {
 
         let zero = nor_nary(graph, &make_name("zero"), ram.d().len());
 
-        let mut bus_states = vec![PinState::INPUT; 16];
-        bus_states[8..16].fill(PinState::OUTPUT);
-        let bus = graph.new_part(&make_name("bus"), &bus_states, |pins| {
-            for i in 0..8 {
-                pins[i + 8] = match pins[i] {
-                    PinState::Input(s) => PinState::Output(s),
-                    _ => panic!("Unexpected pin state"),
-                }
-            }
-        });
+        let bus = Buffer::new(graph, name, 8);
 
         for (ram_pin, ptr_pin) in zip(ram.a(), ptr.d()) {
             ram_pin.connect(ptr_pin);
         }
 
         for i in 0..8 {
-            graph.connect_all(&[&bus[i], &ram.d()[i], reg.d()[i], &buf.q()[i], &zero.a()[i]]);
+            graph.connect_all(&[&bus.a()[i], &ram.d()[i], reg.d()[i], &buf.q()[i], &zero.a()[i]]);
             graph.connect(&reg.q()[i], &buf.a()[i]);
         }
 
@@ -114,12 +105,6 @@ impl DataBlock {
         graph.connect(&reset, ram_we.a());
         graph.connect(&write, ram_we.b());
         graph.connect(ram_we.q(), ram.we_inv());
-
-        // TODO: there must be a cleaner way to turn slice of references into slice of owned clones
-        let mut a = vec![];
-        for pin in ptr.q() {
-            a.push(pin.clone())
-        }
 
         DataBlock {
             zero,
