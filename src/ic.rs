@@ -205,19 +205,20 @@ impl Ic74193 {
     }
 
     pub fn new(graph: &mut Graph, name: &str) -> Self {
-        let up_inv = not_gate(graph, &format!("{}.up_inv", name));
-        let down_inv = not_gate(graph, &format!("{}.down_inv", name));
-        let load = not_gate(graph, &format!("{}.load", name));
-        let clear_inv = not_gate(graph, &format!("{}.clear_inv", name));
-        let adder1 = HalfAdder::new(graph, &format!("{}.adder1", name));
-        let adder2 = FullAdder::new(graph, &format!("{}.adder2", name));
-        let adder3 = FullAdder::new(graph, &format!("{}.adder3", name));
-        let adder4 = FullAdder::new(graph, &format!("{}.adder4", name));
+        let make_name = |part| format!("{}.{}", name, part);
+        let up_inv = not_gate(graph, &make_name("up_inv"));
+        let down_inv = not_gate(graph, &make_name("down_inv"));
+        let load = not_gate(graph, &make_name("load"));
+        let clear_inv = not_gate(graph, &make_name("clear_inv"));
+        let adder1 = HalfAdder::new(graph, &make_name("adder1"));
+        let adder2 = FullAdder::new(graph, &make_name("adder2"));
+        let adder3 = FullAdder::new(graph, &make_name("adder3"));
+        let adder4 = FullAdder::new(graph, &make_name("adder4"));
 
-        let carry = nand_nary(graph, "carry", 5);
+        let carry = nand_nary(graph, &make_name("carry"), 5);
         carry.connect_inputs(&[up_inv.q(), adder1.q(), adder2.q(), adder3.q(), adder4.q()]);
 
-        let borrow = nand_nary(graph, "borrow", 5);
+        let borrow = nand_nary(graph, &make_name("borrow"), 5);
         borrow.connect_inputs(&[
             down_inv.q(),
             adder1.q_inv(),

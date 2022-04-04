@@ -116,6 +116,7 @@ pub struct Graph(Rc<RefCell<GraphImpl>>);
 struct GraphImpl {
     /// Current state of all pins in the graph
     pub pin_states: Vec<PinState>,
+    pub pin_names: Vec<String>,
 
     /// Set of Nodes in the graph. Implemented as map for reverse lookup
     ///
@@ -150,9 +151,10 @@ pub struct RunStats {
 }
 
 impl GraphImpl {
-    fn new_pin(&mut self, state: PinState) -> PinId {
+    fn new_pin(&mut self, state: PinState, name: String) -> PinId {
         let id = self.pin_states.len();
         self.pin_states.push(state);
+        self.pin_names.push(name);
 
         let node_id = self.next_node;
         self.next_node += 1;
@@ -161,6 +163,7 @@ impl GraphImpl {
 
         self.pin_nodes.push(node_id);
 
+        assert_eq!(self.pin_states.len(), self.pin_names.len());
         assert_eq!(self.pin_states.len(), self.pin_nodes.len());
 
         id
@@ -187,28 +190,29 @@ impl GraphImpl {
 
     pub fn update_nodes(&mut self) -> usize {
         let mut update_count = 0;
-        for node in self.nodes.values_mut() {
-            let mut new_signal = Signal::Off;
-            let mut had_output = false;
+        for (node_id, node) in self.nodes.iter_mut() {
+            let mut new_signal = node.signal;
+            let mut out_count = 0;
+            let mut out_id = usize::MAX;
             for pin in node.pin_ids.iter() {
                 match self.pin_states[*pin] {
                     PinState::HiZ | PinState::Input(_) => continue,
                     PinState::Output(signal) => {
-                        if had_output {
+                        if out_count > 0 {
                             new_signal = Signal::Error;
-                            break;
+                            out_count += 1;
                         } else {
-                            had_output = true;
+                            out_count += 1;
+                            out_id = *pin;
                             new_signal = signal;
-                            if signal == Signal::Error {
-                                break;
-                            }
                         }
                     }
                 }
             }
 
             if new_signal != node.signal {
+                //println!("Update node {} from {:?} to {:?} from pin:", node_id, node.signal, new_signal);
+                //println!("    [{}]:{}", out_id, self.pin_names[out_id]);
                 update_count += 1;
                 node.signal = new_signal;
                 for pin_id in node.pin_ids.iter() {
@@ -232,6 +236,26 @@ impl GraphImpl {
             );
         }
     }
+
+    pub fn print_nodes(&self) {
+        for (node_id, node) in self.nodes.iter() {
+            println!("node[{}]: {{\n", node_id);
+            for pin_id in &node.pin_ids {
+                println!("    [{}]:{}", pin_id, self.pin_names[*pin_id]);
+            }
+            println!("}}");
+        }
+    }
+
+    pub fn print_orphans(&self) {
+        for (node_id, node) in &self.nodes {
+            if node.pin_ids.len() < 2 {
+                let pin_id = *node.pin_ids.iter().next().unwrap();
+                let name = &self.pin_names[pin_id];
+                println!("Node {} has orphaned pin: {:?} {}", node_id, pin_id, name);
+            }
+        }
+    }
 }
 
 impl Graph {
@@ -247,7 +271,7 @@ impl Graph {
 
     pub fn new_pin(&mut self, name: String, state: PinState) -> Pin {
         Pin {
-            id: self.g().new_pin(state),
+            id: self.g().new_pin(state, name.clone()),
             name,
             graph: self.clone(),
         }
@@ -376,6 +400,14 @@ impl Graph {
         self.g().pin_states[pin.id] = PinState::Output(signal);
 
         updates
+    }
+
+    pub fn print_orphans(&self) {
+        self.g().print_orphans()
+    }
+
+    pub fn print_nodes(&self) {
+        self.g().print_nodes()
     }
 }
 

@@ -45,7 +45,7 @@ impl DataBlock {
 
         let zero = nor_nary(graph, &make_name("zero"), ram.d().len());
 
-        let bus = Buffer::new(graph, name, 8);
+        let bus = Buffer::new(graph, &make_name("bus"), 8);
 
         for (ram_pin, ptr_pin) in zip(ram.a(), ptr.d()) {
             ram_pin.connect(ptr_pin);
@@ -78,7 +78,7 @@ impl DataBlock {
 
         let reg_count = &count & &d_ce;
         let reg_up = nand_gate(graph, "reg_up");
-        let reg_down = nand_gate(graph, "reg_up");
+        let reg_down = nand_gate(graph, "reg_down");
         graph.connect_all(&[&reg_count, reg_up.a(), reg_down.a()]);
         graph.connect(&up, reg_up.b());
         graph.connect(&down, reg_down.b());
@@ -150,7 +150,9 @@ fn main() {
     ]);
     println!("reg {:?}", d_block.d().iter().val());
 
-    dbg!(graph.run());
+    graph.tick();
+
+    //return;
 
     // Test data reg
     println!("reg {:?}", d_block.d().iter().val());
