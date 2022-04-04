@@ -47,9 +47,9 @@ impl DataBlock {
 
         let mut bus_states = vec![PinState::INPUT; 16];
         bus_states[8..16].fill(PinState::OUTPUT);
-        let bus = graph.new_part(&make_name("bus"), &bus_states, |before, after| {
+        let bus = graph.new_part(&make_name("bus"), &bus_states, |pins| {
             for i in 0..8 {
-                after[i + 8] = match before[i] {
+                pins[i + 8] = match pins[i] {
                     PinState::Input(s) => PinState::Output(s),
                     _ => panic!("Unexpected pin state"),
                 }

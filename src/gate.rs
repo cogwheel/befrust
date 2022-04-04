@@ -14,7 +14,7 @@ impl UnaryGate {
 
     pub fn new<F>(graph: &mut Graph, name: &str, updater: F) -> Self
     where
-        F: 'static + FnMut(&[PinState], &mut [PinState]),
+        F: 'static + FnMut(&mut [PinState]),
     {
         let pins = graph.new_part(name, &[PinState::INPUT, PinState::OUTPUT], updater);
         Self {
@@ -25,14 +25,14 @@ impl UnaryGate {
 }
 
 pub fn not_gate(graph: &mut Graph, name: &str) -> UnaryGate {
-    UnaryGate::new(graph, name, |before, after| {
-        after[UnaryGate::Q] = PinState::Output(!before[UnaryGate::A])
+    UnaryGate::new(graph, name, |pins| {
+        pins[UnaryGate::Q] = PinState::Output(!pins[UnaryGate::A])
     })
 }
 
 pub fn buffer(graph: &mut Graph, name: &str) -> UnaryGate {
-    UnaryGate::new(graph, name, |before, after| {
-        after[UnaryGate::Q] = before[UnaryGate::A]
+    UnaryGate::new(graph, name, |pins| {
+        pins[UnaryGate::Q] = pins[UnaryGate::A]
     })
 }
 
@@ -50,7 +50,7 @@ impl BinaryGate {
 
     pub fn new<F>(graph: &mut Graph, name: &str, updater: F) -> Self
     where
-        F: 'static + FnMut(&[PinState], &mut [PinState]),
+        F: 'static + FnMut(&mut [PinState]),
     {
         let pins = graph.new_part(
             name,
@@ -66,32 +66,32 @@ impl BinaryGate {
 }
 
 pub fn and_gate(graph: &mut Graph, name: &str) -> BinaryGate {
-    BinaryGate::new(graph, name, |before, after| {
-        after[BinaryGate::Q] = PinState::Output(before[BinaryGate::A] & before[BinaryGate::B]);
+    BinaryGate::new(graph, name, |pins| {
+        pins[BinaryGate::Q] = PinState::Output(pins[BinaryGate::A] & pins[BinaryGate::B]);
     })
 }
 
 pub fn nand_gate(graph: &mut Graph, name: &str) -> BinaryGate {
-    BinaryGate::new(graph, name, |before, after| {
-        after[BinaryGate::Q] = PinState::Output(!(before[BinaryGate::A] & before[BinaryGate::B]));
+    BinaryGate::new(graph, name, |pins| {
+        pins[BinaryGate::Q] = PinState::Output(!(pins[BinaryGate::A] & pins[BinaryGate::B]));
     })
 }
 
 pub fn or_gate(graph: &mut Graph, name: &str) -> BinaryGate {
-    BinaryGate::new(graph, name, |before, after| {
-        after[BinaryGate::Q] = PinState::Output(before[BinaryGate::A] | before[BinaryGate::B]);
+    BinaryGate::new(graph, name, |pins| {
+        pins[BinaryGate::Q] = PinState::Output(pins[BinaryGate::A] | pins[BinaryGate::B]);
     })
 }
 
 pub fn nor_gate(graph: &mut Graph, name: &str) -> BinaryGate {
-    BinaryGate::new(graph, name, |before, after| {
-        after[BinaryGate::Q] = PinState::Output(!(before[BinaryGate::A] | before[BinaryGate::B]));
+    BinaryGate::new(graph, name, |pins| {
+        pins[BinaryGate::Q] = PinState::Output(!(pins[BinaryGate::A] | pins[BinaryGate::B]));
     })
 }
 
 pub fn xor_gate(graph: &mut Graph, name: &str) -> BinaryGate {
-    BinaryGate::new(graph, name, |before, after| {
-        after[BinaryGate::Q] = PinState::Output(before[BinaryGate::A] ^ before[BinaryGate::B]);
+    BinaryGate::new(graph, name, |pins| {
+        pins[BinaryGate::Q] = PinState::Output(pins[BinaryGate::A] ^ pins[BinaryGate::B]);
     })
 }
 
@@ -193,7 +193,7 @@ impl NaryGate {
 
     pub fn new<F>(graph: &mut Graph, name: &str, inputs: usize, updater: F) -> Self
     where
-        F: 'static + FnMut(&[PinState], &mut [PinState]),
+        F: 'static + FnMut(&mut [PinState]),
     {
         let mut states = vec![PinState::INPUT; inputs + 1];
         states[0] = PinState::OUTPUT;
@@ -208,47 +208,47 @@ impl NaryGate {
 }
 
 pub fn and_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
-    NaryGate::new(graph, name, inputs, |before, after| {
-        let mut result = before[1].sig();
+    NaryGate::new(graph, name, inputs, |pins| {
+        let mut result = pins[1].sig();
         // No shortcut in case of Errors
-        for state in &before[2..] {
+        for state in &pins[2..] {
             result &= state.sig();
         }
 
-        after[0] = PinState::Output(result);
+        pins[0] = PinState::Output(result);
     })
 }
 
 pub fn or_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
-    NaryGate::new(graph, name, inputs, |before, after| {
-        let mut result = before[1].sig();
-        for state in &before[2..] {
+    NaryGate::new(graph, name, inputs, |pins| {
+        let mut result = pins[1].sig();
+        for state in &pins[2..] {
             result |= state.sig();
         }
 
-        after[0] = PinState::Output(result);
+        pins[0] = PinState::Output(result);
     })
 }
 
 pub fn nand_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
-    NaryGate::new(graph, name, inputs, |before, after| {
-        let mut result = before[1].sig();
-        for state in &before[2..] {
+    NaryGate::new(graph, name, inputs, |pins| {
+        let mut result = pins[1].sig();
+        for state in &pins[2..] {
             result &= state.sig();
         }
 
-        after[0] = PinState::Output(!result);
+        pins[0] = PinState::Output(!result);
     })
 }
 
 pub fn nor_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
-    NaryGate::new(graph, name, inputs, |before, after| {
-        let mut result = before[1].sig();
-        for state in &before[2..] {
+    NaryGate::new(graph, name, inputs, |pins| {
+        let mut result = pins[1].sig();
+        for state in &pins[2..] {
             result |= state.sig();
         }
 
-        after[0] = PinState::Output(!result);
+        pins[0] = PinState::Output(!result);
     })
 }
 
@@ -273,13 +273,16 @@ impl TristateBuffer {
 
     pub fn new(graph: &mut Graph, name: &str, width: usize) -> Self {
         let mut states = vec![PinState::INPUT; 2 * width + 1];
+        // outputs start disconnected
         states[0..width].fill(PinState::HiZ);
 
-        TristateBuffer(graph.new_part(name, &states, move |before, after| {
-            if before.last().unwrap().is_high() {
-                after[0..width].copy_from_slice(&before[width..(2 * width)])
+        TristateBuffer(graph.new_part(name, &states, move |pins| {
+            let (outs, rest) = pins.split_at_mut(width);
+            let (ins, _) = rest.split_at_mut(width);
+            if ins.last().unwrap().is_high() {
+                outs.copy_from_slice(ins)
             } else {
-                after[0..width].fill(PinState::HiZ)
+                outs.fill(PinState::HiZ)
             }
         }))
     }

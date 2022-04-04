@@ -2,7 +2,7 @@ pub mod gate;
 pub mod graph;
 pub mod ic;
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
 pub use gate::*;
@@ -59,7 +59,7 @@ impl ToSignal for &Signal {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, PartialEq, PartialOrd)]
 pub struct BusValue {
     val: usize,
     error: usize,
@@ -92,6 +92,15 @@ impl BusValue {
         } else {
             Signal::Low
         }
+    }
+}
+
+impl Debug for BusValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BusValue")
+            .field("val", &format_args!("{:#x}", self.val))
+            .field("error", &format_args!("{:#x}", self.error))
+            .finish()
     }
 }
 

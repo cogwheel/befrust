@@ -102,8 +102,8 @@ impl Node {
 
 /// A set of pins with an update function
 ///
-/// The update function is called each tick with the "before" and "after" states for the pins
-type Part = Box<dyn FnMut(&[PinState], &mut [PinState])>;
+/// The update function is called each tick with the latest states of the pins
+type Part = Box<dyn FnMut(&mut [PinState])>;
 
 /// The interface to the befrust compute graph
 ///
@@ -116,9 +116,6 @@ pub struct Graph(Rc<RefCell<GraphImpl>>);
 struct GraphImpl {
     /// Current state of all pins in the graph
     pub pin_states: Vec<PinState>,
-
-    /// Output states for part updates
-    pub back_buffer: Vec<PinState>,
 
     /// Set of Nodes in the graph. Implemented as map for reverse lookup
     ///
@@ -227,18 +224,13 @@ impl GraphImpl {
     }
 
     pub fn update_parts(&mut self) {
-        // TODO: swap then clone; use this to communicate previous states (instead of needing
-        //   separate prev pins)
-        self.back_buffer.clone_from(&self.pin_states);
         for (part, pin_range) in self.parts.iter_mut() {
             let start = pin_range.start;
             let end = pin_range.end;
             part(
-                &self.pin_states[start..end],
-                &mut self.back_buffer[start..end],
+                &mut self.pin_states[start..end],
             );
         }
-        std::mem::swap(&mut self.pin_states, &mut self.back_buffer);
     }
 }
 
@@ -302,7 +294,7 @@ impl Graph {
     /// TODO: take (name, state) pairs
     pub fn new_part<F>(&mut self, name: &str, new_states: &[PinState], updater: F) -> Vec<Pin>
     where
-        F: 'static + FnMut(&[PinState], &mut [PinState]),
+        F: 'static + FnMut(&mut [PinState]),
     {
         let start = self.g().pin_states.len();
         let end = start + new_states.len();
@@ -401,8 +393,8 @@ mod test_graph {
         let pins = graph.new_part(
             "not_gate",
             &[PinState::INPUT, PinState::OUTPUT],
-            |input, output| {
-                output[1] = PinState::Output(!(input[0]));
+            |pins| {
+                pins[1] = PinState::Output(!(pins[0]));
             },
         );
 

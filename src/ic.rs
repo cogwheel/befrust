@@ -32,19 +32,19 @@ impl TFlipFlop {
                 PinState::Output(Signal::High),
                 PinState::INPUT,
             ],
-            |before, after| {
-                let new_q = if before[Self::R].is_high() {
+            |pins| {
+                let new_q = if pins[Self::R].is_high() {
                     Signal::Low
-                } else if before[Self::S].is_high() {
+                } else if pins[Self::S].is_high() {
                     Signal::High
-                } else if before[Self::T].is_high() && before[Self::T_PREV].is_lowish() {
-                    before[Self::Q_INV].sig()
+                } else if pins[Self::T].is_high() && pins[Self::T_PREV].is_lowish() {
+                    pins[Self::Q_INV].sig()
                 } else {
-                    before[Self::Q].sig()
+                    pins[Self::Q].sig()
                 };
-                after[Self::Q] = PinState::Output(new_q);
-                after[Self::Q_INV] = PinState::Output(!new_q);
-                after[Self::T_PREV] = before[Self::T];
+                pins[Self::Q] = PinState::Output(new_q);
+                pins[Self::Q_INV] = PinState::Output(!new_q);
+                pins[Self::T_PREV] = pins[Self::T];
             },
         );
         Self {
@@ -488,8 +488,8 @@ impl IcCY7C199 {
         // TODO: randomize
         let mut ram = vec![0xff; Self::NUM_WORDS];
 
-        let pins = graph.new_part(name, &states, move |before, after| {
-            Self::update(&mut ram, before, after);
+        let pins = graph.new_part(name, &states, move |pins| {
+            Self::update(&mut ram, pins);
         });
 
         Self(pins)
@@ -499,28 +499,25 @@ impl IcCY7C199 {
         states[Self::IO_START..Self::IO_END].fill(val);
     }
 
-    fn update(ram: &mut Vec<u8>, before: &[PinState], after: &mut [PinState]) {
-        let ce = !before[Self::CE_INV];
-        let oe = !before[Self::OE_INV];
-        let we = !before[Self::WE_INV];
+    fn update(ram: &mut Vec<u8>, pins: &mut [PinState]) {
+        let ce = !pins[Self::CE_INV];
+        let oe = !pins[Self::OE_INV];
+        let we = !pins[Self::WE_INV];
 
-        let (_, output_pins) = after.split_at_mut(Self::IO_START);
-        let (io_out, _) = output_pins.split_at_mut(Self::WORD_SIZE);
+        let (_, output_pins) = pins.split_at_mut(Self::IO_START);
+        let (io_pins, addr_pins) = output_pins.split_at_mut(Self::WORD_SIZE);
 
-        let data = before[Self::IO_START..Self::IO_END].iter().val().unwrap();
-        let addr = before[Self::ADDR_START..Self::ADDR_END]
-            .iter()
-            .val()
-            .unwrap();
+        let data = io_pins.iter().val().unwrap();
+        let addr = addr_pins.iter().val().unwrap();
 
         if ce.is_lowish() || (oe.is_high() && we.is_high()) {
-            Self::set_io(after, PinState::HiZ);
+            Self::set_io(pins, PinState::HiZ);
         } else if oe.is_high() {
             let data = ram[addr];
-            Self::set_output(io_out, data as usize);
+            Self::set_output(io_pins, data as usize);
         } else if we.is_high() {
             ram[addr] = data as u8;
-            Self::set_input(io_out, data);
+            Self::set_input(io_pins, data);
         }
     }
 
