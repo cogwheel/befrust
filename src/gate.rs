@@ -1,3 +1,4 @@
+use std::iter::zip;
 use crate::*;
 
 use derive_getters::Getters;
@@ -270,11 +271,17 @@ impl Buffer {
     pub fn new(graph: &mut Graph, name: &str, width: usize) -> Self {
         let mut states = vec![PinState::INPUT; 2 * width];
         // outputs start disconnected
-        states[0..width].fill(PinState::HiZ);
+        states[0..width].fill(PinState::OUTPUT);
 
         Self(graph.new_part(name, &states, move |pins| {
             let (outs, ins) = pins.split_at_mut(width);
-            outs.copy_from_slice(ins);
+            for (q, a) in zip(outs, ins) {
+                *q = match a {
+                    PinState::HiZ => PinState::HiZ,
+                    PinState::Input(sig) => PinState::Output(*sig),
+                    _ => PinState::Output(Signal::Error),
+                }
+            }
         }))
     }
 }
@@ -307,7 +314,13 @@ impl TristateBuffer {
             let (outs, rest) = pins.split_at_mut(width);
             let (ins, _) = rest.split_at_mut(width);
             if ins.last().unwrap().is_high() {
-                outs.copy_from_slice(ins)
+                for (q, a) in zip(outs, ins) {
+                    *q = match a {
+                        PinState::HiZ => PinState::HiZ,
+                        PinState::Input(sig) => PinState::Output(*sig),
+                        _ => PinState::Output(Signal::Error),
+                    }
+                }
             } else {
                 outs.fill(PinState::HiZ)
             }

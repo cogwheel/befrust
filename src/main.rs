@@ -134,10 +134,10 @@ fn main() {
     let mut p_ce = graph.new_output("p_ce", Signal::Low);
     let mut d_ce = graph.new_output("d_ce", Signal::Low);
 
+    let d_block = DataBlock::new(&mut graph, "data");
+
     //let mut clear_ck = graph.new_output("clear_ck", Signal::Off);
     let mut reset = graph.new_output("reset", Signal::High);
-
-    let d_block = DataBlock::new(&mut graph, "data");
 
     graph.connect_pairs(&[
         (&up, d_block.up()),
