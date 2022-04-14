@@ -1,9 +1,7 @@
 use befrust::*;
-use derive_getters::Getters;
 use std::fmt::{Debug, Formatter};
 use std::iter::zip;
 
-#[derive(Getters)]
 pub struct DataBlock {
     d_ce: Pin,
     p_ce: Pin,
@@ -12,29 +10,45 @@ pub struct DataBlock {
     count: Pin,
     store: Pin,
     reset: Pin,
-
-    #[getter(skip)]
     bus: BusBuffer,
-
-    #[getter(skip)]
     ptr: Counter16Bit,
-
-    #[getter(skip)]
     zero: NaryGate,
 }
 
 impl Debug for DataBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DataBlock")
-            .field("d", &self.d().iter().val())
-            .field("a", &self.a().iter().val())
+            .field("d", &self.data().iter().val())
+            .field("a", &self.addr().iter().val())
             .field("zero", &self.zero().sig())
             .finish()
     }
 }
 
 impl DataBlock {
-    pub fn d(&self) -> &[Pin] {
+    pub fn d_ce(&self) -> &Pin {
+        &self.d_ce
+    }
+    pub fn p_ce(&self) -> &Pin {
+        &self.p_ce
+    }
+    pub fn up(&self) -> &Pin {
+        &self.up
+    }
+    pub fn down(&self) -> &Pin {
+        &self.down
+    }
+    pub fn count(&self) -> &Pin {
+        &self.count
+    }
+    pub fn store(&self) -> &Pin {
+        &self.store
+    }
+    pub fn reset(&self) -> &Pin {
+        &self.reset
+    }
+
+    pub fn data(&self) -> &[Pin] {
         &self.bus.output()
     }
 
@@ -42,7 +56,7 @@ impl DataBlock {
         self.zero.output()
     }
 
-    pub fn a(&self) -> [&Pin; 16] {
+    pub fn addr(&self) -> [&Pin; 16] {
         self.ptr.output()
     }
 

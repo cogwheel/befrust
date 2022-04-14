@@ -1,8 +1,7 @@
 use crate::*;
-use derive_getters::Getters;
 
 /// T flip-flop used for 74193 counter memory
-#[derive(Debug, Getters)]
+#[derive(Debug)]
 pub struct TFlipFlop {
     toggle: Pin,
     set: Pin,
@@ -12,6 +11,38 @@ pub struct TFlipFlop {
 }
 
 impl TFlipFlop {
+    /// Toggle pin
+    ///
+    /// Unless reset or set are high, output will change states when the toggle changes from low to
+    /// high
+    pub fn toggle(&self) -> &Pin {
+        &self.toggle
+    }
+
+    /// Set pin
+    ///
+    /// Unless reset is High, output will change to High when Set is High
+    pub fn set(&self) -> &Pin {
+        &self.set
+    }
+
+    /// Reset pin
+    ///
+    /// Output will change to Low when Reset is High
+    pub fn reset(&self) -> &Pin {
+        &self.reset
+    }
+
+    /// Output pin
+    pub fn output(&self) -> &Pin {
+        &self.output
+    }
+
+    /// Inverted output pin
+    pub fn out_inv(&self) -> &Pin {
+        &self.out_inv
+    }
+
     // external
     /// Toggle pin index
     const TOGGLE: usize = 0;
@@ -70,28 +101,47 @@ impl TFlipFlop {
 }
 
 /// The low order bit memory and counting logic for the 74193
-#[derive(Debug, Getters)]
+#[derive(Debug)]
 pub struct HalfAdder {
     input: Pin,
     clear: Pin,
     load: Pin,
-
-    #[getter(skip)]
     flip_flop: TFlipFlop,
 }
 
 impl HalfAdder {
-    /// Get toggle pin
+    /// Input pin
+    ///
+    /// Data to be loaded if load occurs
+    pub fn input(&self) -> &Pin {
+        &self.input
+    }
+
+    /// Clear pin
+    ///
+    /// Output will reset to 0 when this is high
+    pub fn clear(&self) -> &Pin {
+        &self.clear
+    }
+
+    /// Load pin
+    ///
+    /// Output will be set to value of input pin when this goes high
+    pub fn load(&self) -> &Pin {
+        &self.load
+    }
+
+    /// Toggle pin
     pub fn toggle(&self) -> &Pin {
         self.flip_flop.toggle()
     }
 
-    /// Get output pin
+    /// Output pin
     pub fn output(&self) -> &Pin {
         self.flip_flop.output()
     }
 
-    /// Get inverted output pin
+    /// Inverted output pin
     pub fn out_inv(&self) -> &Pin {
         self.flip_flop.out_inv()
     }
@@ -122,18 +172,36 @@ impl HalfAdder {
 }
 
 /// The higher-order bit memory and counting logic for the 74193
-#[derive(Debug, Getters)]
+#[derive(Debug)]
 pub struct FullAdder {
     up: Pin,
     down: Pin,
     up_cond: Pin,
     down_cond: Pin,
-
-    #[getter(skip)]
     half_adder: HalfAdder,
 }
 
 impl FullAdder {
+    /// Input up count signal
+    pub fn up(&self) -> &Pin {
+        &self.up
+    }
+
+    /// Input down count signal
+    pub fn down(&self) -> &Pin {
+        &self.down
+    }
+
+    /// Condition for when the up count should be observed
+    pub fn up_cond(&self) -> &Pin {
+        &self.up_cond
+    }
+
+    /// Condition for when the down count should be observed
+    pub fn down_cond(&self) -> &Pin {
+        &self.down_cond
+    }
+
     /// Input pin used for loading data
     pub fn input(&self) -> &Pin {
         &self.half_adder.input()
@@ -179,8 +247,7 @@ impl FullAdder {
 
 /// Implementation of the 74193 chip
 ///
-/// Based on schematic from https://www.ti.com/lit/ds/symlink/sn54ls193-sp.pdf?ts=1649956332500
-#[derive(Getters)]
+/// Based on schematic from <https://www.ti.com/lit/ds/symlink/sn54ls193-sp.pdf?ts=1649956332500>
 pub struct Ic74193 {
     // inputs
     up: Pin,
@@ -192,17 +259,41 @@ pub struct Ic74193 {
     borrow: Pin,
     carry: Pin,
 
-    #[getter(skip)]
     adder1: HalfAdder,
-    #[getter(skip)]
     adder2: FullAdder,
-    #[getter(skip)]
     adder3: FullAdder,
-    #[getter(skip)]
     adder4: FullAdder,
 }
 
 impl Ic74193 {
+    /// Input up count signal
+    ///
+    /// Normally high; when transitioning to High, causes counter to increase by one
+    pub fn up(&self) -> &Pin {
+        &self.up
+    }
+
+    /// Input down count signal
+    ///
+    /// Normally held high. When transitioning to high (after going low), causes counter to count down
+    pub fn down(&self) -> &Pin {
+        &self.down
+    }
+
+    /// Input inverted load signal
+    ///
+    /// When brought low, the data in the counter is set to the value on the `input`
+    pub fn load_inv(&self) -> &Pin {
+        &self.load_inv
+    }
+
+    /// Clear signal
+    ///
+    /// When high, the data in the counter is reset to 0
+    pub fn clear(&self) -> &Pin {
+        &self.clear
+    }
+
     /// The input pins (d1-d4)
     pub fn input(&self) -> [&Pin; 4] {
         [self.in1(), self.in2(), self.in3(), self.in4()]
@@ -226,6 +317,20 @@ impl Ic74193 {
     /// Input pin 4 (d4)
     pub fn in4(&self) -> &Pin {
         self.adder4.input()
+    }
+
+    /// Carry output
+    ///
+    /// Normally high. If counter is 15, transitions to low, then High, following the up signal
+    pub fn carry(&self) -> &Pin {
+        &self.carry
+    }
+
+    /// Borrow output
+    ///
+    /// Normally high. If counter is 0, transitions to low, then High, following the down signal
+    pub fn borrow(&self) -> &Pin {
+        &self.borrow
     }
 
     /// The output pins (q1-q4)

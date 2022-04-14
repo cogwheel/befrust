@@ -6,22 +6,22 @@ Get what's already here in ship-shape.
 
 * [X] Finish renaming single-letter pins
   * [X] FullAdder
+* [X] rsdoc everything
+  * [X] add doc comments
+  * [X] probably get rid of derive-getters
 * [ ] Comprehensive tests
   * [ ] tests succeeded when ic74193's `output()` returned `dN*` instead of `qN*`
 * [ ] Finish data block
   * [ ] Fix data counter
   * [ ] Add clear clock
-* [ ] rsdoc everything
-  * [X] add doc comments
-  * [ ] publish the docs and publish them somewhere
-    * [ ] maybe need to split this into front/back-end
-  * [ ] update links below
-  * [ ] probably get rid of derive-getters
 
 ## Later
 
 Make the bfpu, including any necessary or helpful updates to the compute graph
 
+* [ ] publish the docs
+  * [ ] maybe need to split this into front/back-end
+  * [ ] update links below
 * [ ] Helper to connect busses (like connect_many, NaryGate::connect_inputs())
 * [ ] Clocks - 3 phase: instruction -> count -> store
 * [ ] Randomize RAM contents - need some re-init mechanism (chonky... might be helped by separating

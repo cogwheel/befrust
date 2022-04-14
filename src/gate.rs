@@ -1,16 +1,23 @@
 use crate::*;
 use std::iter::zip;
 
-use derive_getters::Getters;
-
 /// Represents a single-input, single-output logic gate
-#[derive(Getters)]
 pub struct UnaryGate {
     input: Pin,
     output: Pin,
 }
 
 impl UnaryGate {
+    /// Input pin
+    pub fn input(&self) -> &Pin {
+        &self.input
+    }
+
+    /// Output pin
+    pub fn output(&self) -> &Pin {
+        &self.output
+    }
+
     /// Input pin index
     pub const INPUT: usize = 0;
 
@@ -49,7 +56,6 @@ pub fn buffer(graph: &mut Graph, name: &str) -> UnaryGate {
 }
 
 /// Represents single-bit, two-input logic gate
-#[derive(Getters)]
 pub struct BinaryGate {
     input_a: Pin,
     input_b: Pin,
@@ -57,6 +63,21 @@ pub struct BinaryGate {
 }
 
 impl BinaryGate {
+    /// First input pin
+    pub fn input_a(&self) -> &Pin {
+        &self.input_a
+    }
+
+    /// Second input pin
+    pub fn input_b(&self) -> &Pin {
+        &self.input_b
+    }
+
+    /// Output pin
+    pub fn output(&self) -> &Pin {
+        &self.output
+    }
+
     /// First input pin index
     pub const INPUT_A: usize = 0;
 
