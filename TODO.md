@@ -18,6 +18,7 @@ Get what's already here in ship-shape.
 
 Make the bfpu, including any necessary or helpful updates to the compute graph
 
+* [ ] Helper to connect busses (like connect_many)
 * [ ] Clocks - 3 phase: instruction -> count -> store
 * [ ] Randomize RAM contents - need some re-init mechanism (chonky... might be helped by separating
   graph from execution)

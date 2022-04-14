@@ -5,13 +5,13 @@ use derive_getters::Getters;
 
 #[derive(Getters)]
 pub struct UnaryGate {
-    a: Pin,
-    q: Pin,
+    input: Pin,
+    output: Pin,
 }
 
 impl UnaryGate {
-    pub const A: usize = 0;
-    pub const Q: usize = 1;
+    pub const INPUT: usize = 0;
+    pub const OUTPUT: usize = 1;
 
     pub fn new<F>(graph: &mut Graph, name: &str, updater: F) -> Self
     where
@@ -19,35 +19,35 @@ impl UnaryGate {
     {
         let pins = graph.new_part(name, &[PinState::INPUT, PinState::OUTPUT], updater);
         Self {
-            a: pins[Self::A].clone(),
-            q: pins[Self::Q].clone(),
+            input: pins[Self::INPUT].clone(),
+            output: pins[Self::OUTPUT].clone(),
         }
     }
 }
 
 pub fn not_gate(graph: &mut Graph, name: &str) -> UnaryGate {
     UnaryGate::new(graph, name, |pins| {
-        pins[UnaryGate::Q] = PinState::Output(!pins[UnaryGate::A])
+        pins[UnaryGate::OUTPUT] = PinState::Output(!pins[UnaryGate::INPUT])
     })
 }
 
 pub fn buffer(graph: &mut Graph, name: &str) -> UnaryGate {
     UnaryGate::new(graph, name, |pins| {
-        pins[UnaryGate::Q] = PinState::Output(pins[UnaryGate::A].sig())
+        pins[UnaryGate::OUTPUT] = PinState::Output(pins[UnaryGate::INPUT].sig())
     })
 }
 
 #[derive(Getters)]
 pub struct BinaryGate {
-    a: Pin,
-    b: Pin,
-    q: Pin,
+    input_a: Pin,
+    input_b: Pin,
+    output: Pin,
 }
 
 impl BinaryGate {
-    pub const A: usize = 0;
-    pub const B: usize = 1;
-    pub const Q: usize = 2;
+    pub const INPUT_A: usize = 0;
+    pub const INPUT_B: usize = 1;
+    pub const OUTPUT: usize = 2;
 
     pub fn new<F>(graph: &mut Graph, name: &str, updater: F) -> Self
     where
@@ -59,40 +59,40 @@ impl BinaryGate {
             updater,
         );
         Self {
-            a: pins[Self::A].clone(),
-            b: pins[Self::B].clone(),
-            q: pins[Self::Q].clone(),
+            input_a: pins[Self::INPUT_A].clone(),
+            input_b: pins[Self::INPUT_B].clone(),
+            output: pins[Self::OUTPUT].clone(),
         }
     }
 }
 
 pub fn and_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     BinaryGate::new(graph, name, |pins| {
-        pins[BinaryGate::Q] = PinState::Output(pins[BinaryGate::A] & pins[BinaryGate::B]);
+        pins[BinaryGate::OUTPUT] = PinState::Output(pins[BinaryGate::INPUT_A] & pins[BinaryGate::INPUT_B]);
     })
 }
 
 pub fn nand_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     BinaryGate::new(graph, name, |pins| {
-        pins[BinaryGate::Q] = PinState::Output(!(pins[BinaryGate::A] & pins[BinaryGate::B]));
+        pins[BinaryGate::OUTPUT] = PinState::Output(!(pins[BinaryGate::INPUT_A] & pins[BinaryGate::INPUT_B]));
     })
 }
 
 pub fn or_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     BinaryGate::new(graph, name, |pins| {
-        pins[BinaryGate::Q] = PinState::Output(pins[BinaryGate::A] | pins[BinaryGate::B]);
+        pins[BinaryGate::OUTPUT] = PinState::Output(pins[BinaryGate::INPUT_A] | pins[BinaryGate::INPUT_B]);
     })
 }
 
 pub fn nor_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     BinaryGate::new(graph, name, |pins| {
-        pins[BinaryGate::Q] = PinState::Output(!(pins[BinaryGate::A] | pins[BinaryGate::B]));
+        pins[BinaryGate::OUTPUT] = PinState::Output(!(pins[BinaryGate::INPUT_A] | pins[BinaryGate::INPUT_B]));
     })
 }
 
 pub fn xor_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     BinaryGate::new(graph, name, |pins| {
-        pins[BinaryGate::Q] = PinState::Output(pins[BinaryGate::A] ^ pins[BinaryGate::B]);
+        pins[BinaryGate::OUTPUT] = PinState::Output(pins[BinaryGate::INPUT_A] ^ pins[BinaryGate::INPUT_B]);
     })
 }
 
@@ -103,8 +103,8 @@ impl Not for &Pin {
         let mut graph = self.graph();
         let name = format!("not({})", self.name());
         let gate = not_gate(&mut graph, &name);
-        graph.connect(self, &gate.a());
-        gate.q().clone()
+        graph.connect(self, &gate.input());
+        gate.output().clone()
     }
 }
 
@@ -123,9 +123,9 @@ impl BitAnd for &Pin {
         let mut graph = self.graph();
         let name = format!("and({}, {})", self.name(), rhs.name());
         let gate = and_gate(&mut graph, &name);
-        graph.connect(self, gate.a());
-        graph.connect(rhs, gate.b());
-        gate.q().clone()
+        graph.connect(self, gate.input_a());
+        graph.connect(rhs, gate.input_b());
+        gate.output().clone()
     }
 }
 
@@ -144,9 +144,9 @@ impl BitOr for &Pin {
         let mut graph = self.graph();
         let name = format!("or({}, {})", self.name(), rhs.name());
         let gate = or_gate(&mut graph, &name);
-        graph.connect(&self, gate.a());
-        graph.connect(&rhs, gate.b());
-        gate.q().clone()
+        graph.connect(&self, gate.input_a());
+        graph.connect(&rhs, gate.input_b());
+        gate.output().clone()
     }
 }
 
@@ -165,9 +165,9 @@ impl BitXor for &Pin {
         let mut graph = self.graph();
         let name = format!("xor({}, {})", self.name(), rhs.name());
         let gate = xor_gate(&mut graph, &name);
-        graph.connect(self, gate.a());
-        graph.connect(rhs, gate.b());
-        gate.q().clone()
+        graph.connect(self, gate.input_a());
+        graph.connect(rhs, gate.input_b());
+        gate.output().clone()
     }
 }
 
@@ -185,10 +185,10 @@ impl NaryGate {
     pub fn input(&self) -> &[Pin] {
         &self.0[Self::INPUTS..]
     }
-    pub fn n(&self, n: usize) -> &Pin {
+    pub fn input_n(&self, n: usize) -> &Pin {
         &self.0[Self::INPUTS + n]
     }
-    pub fn q(&self) -> &Pin {
+    pub fn output(&self) -> &Pin {
         &self.0[Self::OUTPUT]
     }
 
@@ -206,7 +206,7 @@ impl NaryGate {
 
     pub fn connect_inputs(&self, pins: &[&Pin]) {
         for (i, pin) in pins.iter().enumerate() {
-            pin.connect(self.n(i));
+            pin.connect(self.input_n(i));
         }
     }
 }
@@ -363,13 +363,13 @@ mod test_gates {
         let not1 = not_gate(&mut graph, "not2");
         let not2 = not_gate(&mut graph, "not1");
 
-        graph.connect(&a, not1.a());
-        graph.connect(not1.q(), not2.a());
+        graph.connect(&a, not1.input());
+        graph.connect(not1.output(), not2.input());
 
         graph.run();
 
-        assert_low!(not1.q());
-        assert_high!(not2.q());
+        assert_low!(not1.output());
+        assert_high!(not2.output());
     }
 
     #[test]
@@ -383,14 +383,14 @@ mod test_gates {
         let high_and_low = and_gate(&mut graph, "and1");
         let high_and_high = and_gate(&mut graph, "and2");
 
-        graph.connect_all(&[&high, high_and_low.a(), high_and_high.a()]);
-        graph.connect(&low, high_and_low.b());
-        graph.connect(&high2, high_and_high.b());
+        graph.connect_all(&[&high, high_and_low.input_a(), high_and_high.input_a()]);
+        graph.connect(&low, high_and_low.input_b());
+        graph.connect(&high2, high_and_high.input_b());
 
         graph.run();
 
-        assert_low!(high_and_low.q());
-        assert_high!(high_and_high.q());
+        assert_low!(high_and_low.output());
+        assert_high!(high_and_high.output());
     }
 
     #[test]
@@ -407,12 +407,12 @@ mod test_gates {
 
         graph.run();
 
-        assert_high!(andy.q());
+        assert_high!(andy.output());
 
         a4.set_output(Signal::Low);
         graph.run();
 
-        assert_low!(andy.q());
+        assert_low!(andy.output());
     }
 
     #[test]
@@ -426,14 +426,14 @@ mod test_gates {
         let high_nand_low = nand_gate(&mut graph, "nand1");
         let high_nand_high = nand_gate(&mut graph, "nand2");
 
-        graph.connect_all(&[&high, high_nand_low.a(), high_nand_high.a()]);
-        graph.connect(&low, high_nand_low.b());
-        graph.connect(&high2, high_nand_high.b());
+        graph.connect_all(&[&high, high_nand_low.input_a(), high_nand_high.input_a()]);
+        graph.connect(&low, high_nand_low.input_b());
+        graph.connect(&high2, high_nand_high.input_b());
 
         graph.run();
 
-        assert_high!(high_nand_low.q());
-        assert_low!(high_nand_high.q());
+        assert_high!(high_nand_low.output());
+        assert_low!(high_nand_high.output());
     }
 
     #[test]
@@ -450,12 +450,12 @@ mod test_gates {
 
         graph.run();
 
-        assert_high!(nandy.q());
+        assert_high!(nandy.output());
 
         a4.set_output(Signal::High);
         graph.run();
 
-        assert_low!(nandy.q());
+        assert_low!(nandy.output());
     }
 
     #[test]

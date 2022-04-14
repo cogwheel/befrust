@@ -214,18 +214,18 @@ impl Ic74193 {
         let adder4 = FullAdder::new(graph, &make_name("adder4"));
 
         let carry = nand_nary(graph, &make_name("carry"), 5);
-        carry.connect_inputs(&[up_inv.q(), adder1.q(), adder2.q(), adder3.q(), adder4.q()]);
+        carry.connect_inputs(&[up_inv.output(), adder1.q(), adder2.q(), adder3.q(), adder4.q()]);
 
         let borrow = nand_nary(graph, &make_name("borrow"), 5);
         borrow.connect_inputs(&[
-            down_inv.q(),
+            down_inv.output(),
             adder1.q_inv(),
             adder2.q_inv(),
             adder3.q_inv(),
             adder4.q_inv(),
         ]);
 
-        let toggle1 = !(up_inv.q() | down_inv.q());
+        let toggle1 = !(up_inv.output() | down_inv.output());
 
         toggle1.connect(adder1.t());
 
@@ -245,17 +245,17 @@ impl Ic74193 {
         graph.connect(&down_cond4, adder4.down_cond());
 
         up_inv
-            .q()
+            .output()
             .connect_all(&[adder2.up(), adder3.up(), adder4.up()]);
 
         down_inv
-            .q()
+            .output()
             .connect_all(&[adder2.down(), adder3.down(), adder4.down()]);
 
-        load.q()
+        load.output()
             .connect_all(&[adder1.load(), adder2.load(), adder3.load(), adder4.load()]);
 
-        clear_inv.q().connect_all(&[
+        clear_inv.output().connect_all(&[
             adder1.clear(),
             adder2.clear(),
             adder3.clear(),
@@ -263,12 +263,12 @@ impl Ic74193 {
         ]);
 
         Self {
-            up: up_inv.a().clone(),
-            down: down_inv.a().clone(),
-            load_inv: load.a().clone(),
-            clear: clear_inv.a().clone(),
-            carry: carry.q().clone(),
-            borrow: borrow.q().clone(),
+            up: up_inv.input().clone(),
+            down: down_inv.input().clone(),
+            load_inv: load.input().clone(),
+            clear: clear_inv.input().clone(),
+            carry: carry.output().clone(),
+            borrow: borrow.output().clone(),
             adder1,
             adder2,
             adder3,
