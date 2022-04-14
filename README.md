@@ -25,9 +25,10 @@ Befrust doesn't:
 
 Befrust will have:
 
-* Busses, i.e. multiple signals packed together as a group
-* Conversions between signals/busses and numbers
+* DONE ~~Busses, i.e. multiple signals packed together as a group~~
+* DONE ~~Conversions between signals/busses and numbers~~
 * Better QoL. The interface of the graph, the creation of custom parts, etc. will be cleaned up to make it convenient, comprehensible, and more statically safe
+* See [TODOs](TODO.md) for more
 
 
 ## TODO: rustdoc
