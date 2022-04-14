@@ -1,6 +1,6 @@
-use std::fmt::{Debug, Formatter};
 use befrust::*;
 use derive_getters::Getters;
+use std::fmt::{Debug, Formatter};
 use std::iter::zip;
 
 #[derive(Getters)]
@@ -63,7 +63,13 @@ impl DataBlock {
         }
 
         for i in 0..8 {
-            graph.connect_all(&[&bus.input()[i], &ram.io()[i], reg.input()[i], &buf.output()[i], &zero.input()[i]]);
+            graph.connect_all(&[
+                &bus.input()[i],
+                &ram.io()[i],
+                reg.input()[i],
+                &buf.output()[i],
+                &zero.input()[i],
+            ]);
             graph.connect(&reg.output()[i], &buf.input()[i]);
         }
 
@@ -132,7 +138,6 @@ impl DataBlock {
     }
 }
 
-// TODO: make brainfuck computer
 fn main() {
     #![allow(unused_assignments, unused_mut)]
 
@@ -190,7 +195,6 @@ fn main() {
 
     println!("count low: {:?}", d_block);
 
-
     // test data ptr
     d_ce.set_output(Signal::Low);
     graph.run();
@@ -226,4 +230,18 @@ fn main() {
     graph.run();
 
     println!("ptr down 5{:?}", d_block);
+
+    up.set_output(Signal::High);
+    graph.pulse_output(&mut count);
+    graph.pulse_output(&mut count);
+    graph.pulse_output(&mut count);
+
+    println!("ptr up 3{:?}", d_block);
+
+    p_ce.set_output(Signal::Low);
+    d_ce.set_output(Signal::High);
+
+    graph.run();
+
+    println!("ptr up 3{:?}", d_block);
 }

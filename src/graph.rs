@@ -69,7 +69,6 @@ impl ToSignal for &Pin {
     }
 }
 
-// TODO: wat
 impl ToSignal for &&Pin {
     fn sig(&self) -> Signal {
         (**self).sig()
@@ -119,11 +118,10 @@ struct GraphImpl {
     pub pin_states: Vec<PinState>,
     pub pin_names: Vec<String>,
 
+    // This could be a vector for cache friendliness but it would either:
+    //   * require extra logic to update the reverse lookup
+    //   * leave a bunch of empty nodes as pins are connected to each other
     /// Set of Nodes in the graph. Implemented as map for reverse lookup
-    ///
-    /// TODO: this could be a vector for cache friendliness but it would either:
-    ///   * require extra logic to update the reverse lookup
-    ///   * leave a bunch of empty nodes as pins are connected to each other
     pub nodes: BTreeMap<usize, Node>,
 
     /// Used to assign node ids
@@ -143,8 +141,6 @@ pub struct RunStats {
     pub ticks: usize,
 
     /// Total number of node updates
-    ///
-    /// TODO: maybe there should be pins also or instead?
     pub updates: usize,
 
     /// Number of ticks in the final cycle
@@ -155,7 +151,7 @@ impl Add for RunStats {
     type Output = RunStats;
 
     fn add(self, rhs: Self) -> Self::Output {
-        RunStats{
+        RunStats {
             ticks: self.ticks + rhs.ticks,
             updates: self.updates + rhs.updates,
             cycle: self.cycle + rhs.cycle,
@@ -202,7 +198,6 @@ impl GraphImpl {
     }
 
     pub fn update_nodes(&mut self) -> usize {
-        // TODO: make a debug/trace mode
         #![allow(unused_assignments, unused_variables)]
         let mut update_count = 0;
         for (node_id, node) in self.nodes.iter_mut() {
@@ -246,9 +241,7 @@ impl GraphImpl {
         for (part, pin_range) in self.parts.iter_mut() {
             let start = pin_range.start;
             let end = pin_range.end;
-            part(
-                &mut self.pin_states[start..end],
-            );
+            part(&mut self.pin_states[start..end]);
         }
     }
 
@@ -274,8 +267,6 @@ impl GraphImpl {
 }
 
 impl Graph {
-    // TODO: use IntoIter for sequence interfaces; impl IntoIter for &[&Pin]
-
     pub fn new() -> Self {
         Self(Rc::new(RefCell::new(GraphImpl::default())))
     }
@@ -329,8 +320,6 @@ impl Graph {
     ///
     /// A "part" is a set of pins with an associated update function. Each tick, the associated
     /// update function produces a new set of PinStates given the existing states.
-    ///
-    /// TODO: take (name, state) pairs
     pub fn new_part<F>(&mut self, name: &str, new_states: &[PinState], updater: F) -> Vec<Pin>
     where
         F: 'static + FnMut(&mut [PinState]),
@@ -446,13 +435,9 @@ mod test_graph {
         let a = graph.new_output("a", Signal::High);
         //let b = graph.new_output(Signal::High);
 
-        let pins = graph.new_part(
-            "not_gate",
-            &[PinState::INPUT, PinState::OUTPUT],
-            |pins| {
-                pins[1] = PinState::Output(!(pins[0]));
-            },
-        );
+        let pins = graph.new_part("not_gate", &[PinState::INPUT, PinState::OUTPUT], |pins| {
+            pins[1] = PinState::Output(!(pins[0]));
+        });
 
         graph.connect(&a, &pins[0]);
 
