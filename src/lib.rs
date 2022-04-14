@@ -61,8 +61,8 @@ impl ToSignal for &Signal {
 
 #[derive(Copy, Clone, Default, PartialEq, PartialOrd)]
 pub struct BusValue {
-    val: usize,
-    error: usize,
+    pub val: usize,
+    pub error: usize,
 }
 
 impl BusValue {
@@ -92,6 +92,7 @@ impl BusValue {
         } else {
             Signal::Low
         }
+        // TODO: figure out how to have Signal::Off on buses
     }
 }
 

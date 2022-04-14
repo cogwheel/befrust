@@ -14,7 +14,7 @@ pub struct DataBlock {
     reset: Pin,
 
     #[getter(skip)]
-    bus: Buffer,
+    bus: BusBuffer,
 
     #[getter(skip)]
     ptr: Counter16Bit,
@@ -35,7 +35,7 @@ impl Debug for DataBlock {
 
 impl DataBlock {
     pub fn d(&self) -> &[Pin] {
-        &self.bus.q()
+        &self.bus.output()
     }
 
     pub fn zero(&self) -> &Pin {
@@ -52,11 +52,11 @@ impl DataBlock {
         let ptr = Counter16Bit::new(graph, &make_name("ptr"));
         let reg = Counter8Bit::new(graph, &make_name("reg"));
 
-        let buf = TristateBuffer::new(graph, &make_name("buf"), 8);
+        let buf = BusTristate::new(graph, &make_name("buf"), 8);
 
         let zero = nor_nary(graph, &make_name("zero"), ram.io().len());
 
-        let bus = Buffer::new(graph, &make_name("bus"), 8);
+        let bus = BusBuffer::new(graph, &make_name("bus"), 8);
 
         for (ram_pin, ptr_pin) in zip(ram.addr(), ptr.output()) {
             ram_pin.connect(ptr_pin);

@@ -33,7 +33,7 @@ pub fn not_gate(graph: &mut Graph, name: &str) -> UnaryGate {
 
 pub fn buffer(graph: &mut Graph, name: &str) -> UnaryGate {
     UnaryGate::new(graph, name, |pins| {
-        pins[UnaryGate::Q] = pins[UnaryGate::A]
+        pins[UnaryGate::Q] = PinState::Output(pins[UnaryGate::A].sig())
     })
 }
 
@@ -183,21 +183,24 @@ pub struct NaryGate(Vec<Pin>);
 
 impl NaryGate {
     pub fn input(&self) -> &[Pin] {
-        &self.0[1..]
+        &self.0[Self::INPUTS..]
     }
     pub fn n(&self, n: usize) -> &Pin {
-        &self.0[n + 1]
+        &self.0[Self::INPUTS + n]
     }
     pub fn q(&self) -> &Pin {
-        &self.0[0]
+        &self.0[Self::OUTPUT]
     }
+
+    pub const INPUTS: usize = 1;
+    pub const OUTPUT: usize = 0;
 
     pub fn new<F>(graph: &mut Graph, name: &str, inputs: usize, updater: F) -> Self
     where
         F: 'static + FnMut(&mut [PinState]),
     {
-        let mut states = vec![PinState::INPUT; inputs + 1];
-        states[0] = PinState::OUTPUT;
+        let mut states = vec![PinState::INPUT; Self::INPUTS + inputs];
+        states[Self::OUTPUT] = PinState::OUTPUT;
         Self(graph.new_part(name, &states, updater))
     }
 
@@ -210,9 +213,9 @@ impl NaryGate {
 
 pub fn and_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
     NaryGate::new(graph, name, inputs, |pins| {
-        let mut result = pins[1].sig();
+        let mut result = pins[NaryGate::INPUTS].sig();
         // No shortcut in case of Errors
-        for state in &pins[2..] {
+        for state in &pins[NaryGate::INPUTS + 1..] {
             result &= state.sig();
         }
 
@@ -222,8 +225,8 @@ pub fn and_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
 
 pub fn or_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
     NaryGate::new(graph, name, inputs, |pins| {
-        let mut result = pins[1].sig();
-        for state in &pins[2..] {
+        let mut result = pins[NaryGate::INPUTS].sig();
+        for state in &pins[NaryGate::INPUTS + 1..] {
             result |= state.sig();
         }
 
@@ -233,8 +236,8 @@ pub fn or_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
 
 pub fn nand_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
     NaryGate::new(graph, name, inputs, |pins| {
-        let mut result = pins[1].sig();
-        for state in &pins[2..] {
+        let mut result = pins[NaryGate::INPUTS].sig();
+        for state in &pins[NaryGate::INPUTS + 1..] {
             result &= state.sig();
         }
 
@@ -244,8 +247,8 @@ pub fn nand_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
 
 pub fn nor_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
     NaryGate::new(graph, name, inputs, |pins| {
-        let mut result = pins[1].sig();
-        for state in &pins[2..] {
+        let mut result = pins[NaryGate::INPUTS].sig();
+        for state in &pins[NaryGate::INPUTS + 1..] {
             result |= state.sig();
         }
 
@@ -253,15 +256,16 @@ pub fn nor_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
     })
 }
 
-pub struct Buffer(Vec<Pin>);
+// TODO: Unify bus gates and nary gates
+pub struct BusBuffer(Vec<Pin>);
 
-impl Buffer {
+impl BusBuffer {
     pub fn input(&self) -> &[Pin] {
-        &self.0[self.width()..2 * self.width()]
+        &self.0[self.width()..]
     }
 
-    pub fn q(&self) -> &[Pin] {
-        &self.0[0..self.width()]
+    pub fn output(&self) -> &[Pin] {
+        &self.0[..self.width()]
     }
 
     pub fn width(&self) -> usize {
@@ -270,7 +274,6 @@ impl Buffer {
 
     pub fn new(graph: &mut Graph, name: &str, width: usize) -> Self {
         let mut states = vec![PinState::INPUT; 2 * width];
-        // outputs start disconnected
         states[0..width].fill(PinState::OUTPUT);
 
         Self(graph.new_part(name, &states, move |pins| {
@@ -286,15 +289,15 @@ impl Buffer {
     }
 }
 
-pub struct TristateBuffer(Vec<Pin>);
+pub struct BusTristate(Vec<Pin>);
 
-impl TristateBuffer {
+impl BusTristate {
     pub fn input(&self) -> &[Pin] {
         &self.0[self.width()..2 * self.width()]
     }
 
     pub fn output(&self) -> &[Pin] {
-        &self.0[0..self.width()]
+        &self.0[..self.width()]
     }
 
     pub fn en(&self) -> &Pin {
@@ -454,6 +457,80 @@ mod test_gates {
         graph.run();
 
         assert_low!(nandy.q());
+    }
+
+    #[test]
+    fn test_bus_buffer() {
+        let mut graph = Graph::new();
+
+        let buffer = BusBuffer::new(&mut graph, "buffer", 5);
+
+        let mut inputs = graph.new_pins("inputs", &[PinState::Output(Signal::Low); 5]);
+        for i in 0..5 {
+            graph.connect(&inputs[i], &buffer.input()[i]);
+        }
+
+        graph.run();
+
+        for i in 0..5 {
+            assert_low!(buffer.output()[i]);
+        }
+
+        inputs[2].set_output(Signal::High);
+        graph.run();
+
+        for i in 0..5 {
+            if i == 2 {
+                assert_high!(buffer.output()[i]);
+            } else {
+                assert_low!(buffer.output()[i]);
+            }
+        }
+    }
+
+    #[test]
+    fn test_bus_tristate() {
+        let mut graph = Graph::new();
+
+        let buffer = BusTristate::new(&mut graph, "buffer", 5);
+
+        let mut inputs = graph.new_pins("inputs", &[PinState::Output(Signal::Low); 5]);
+        for i in 0..5 {
+            graph.connect(&inputs[i], &buffer.input()[i]);
+        }
+
+        let mut enable = graph.new_output("enable", Signal::Low);
+        graph.connect(&enable, buffer.en());
+
+        graph.run();
+
+        for i in 0..5 {
+            assert_eq!(PinState::HiZ, buffer.output()[i].state());
+        }
+
+        enable.set_output(Signal::High);
+        graph.run();
+        for i in 0..5 {
+            assert_low!(buffer.output()[i]);
+        }
+
+
+        inputs[2].set_output(Signal::High);
+        graph.run();
+
+        for i in 0..5 {
+            if i == 2 {
+                assert_high!(buffer.output()[i]);
+            } else {
+                assert_low!(buffer.output()[i]);
+            }
+        }
+
+        enable.set_output(Signal::Low);
+        graph.run();
+        for i in 0..5 {
+            assert_eq!(PinState::HiZ, buffer.output()[i].state());
+        }
     }
 }
 

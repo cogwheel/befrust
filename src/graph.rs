@@ -69,6 +69,7 @@ impl ToSignal for &Pin {
     }
 }
 
+// TODO: wat
 impl ToSignal for &&Pin {
     fn sig(&self) -> Signal {
         (**self).sig()
