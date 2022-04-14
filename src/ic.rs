@@ -1,6 +1,7 @@
 use crate::*;
 use derive_getters::Getters;
 
+/// T flip-flop used for 74193 counter memory
 #[derive(Debug, Getters)]
 pub struct TFlipFlop {
     toggle: Pin,
@@ -12,15 +13,26 @@ pub struct TFlipFlop {
 
 impl TFlipFlop {
     // external
+    /// Toggle pin index
     const TOGGLE: usize = 0;
+
+    /// Set pin index
     const SET: usize = 1;
+
+    /// Reset pin index
     const RESET: usize = 2;
+
+    /// Output pin index
     const OUTPUT: usize = 3;
+
+    /// Inverted output pin index
     const OUT_INV: usize = 4;
 
     // internal for edge detection
+    /// Previous toggle state index
     const TOGGLE_PREV: usize = 5;
 
+    /// Create a T-flip flop
     pub fn new(graph: &mut Graph, name: &str) -> Self {
         let pins = graph.new_part(
             name,
@@ -57,6 +69,7 @@ impl TFlipFlop {
     }
 }
 
+/// The low order bit memory and counting logic for the 74193
 #[derive(Debug, Getters)]
 pub struct HalfAdder {
     input: Pin,
@@ -68,16 +81,22 @@ pub struct HalfAdder {
 }
 
 impl HalfAdder {
+    /// Get toggle pin
     pub fn toggle(&self) -> &Pin {
         self.flip_flop.toggle()
     }
+
+    /// Get output pin
     pub fn output(&self) -> &Pin {
         self.flip_flop.output()
     }
+
+    /// Get inverted output pin
     pub fn out_inv(&self) -> &Pin {
         self.flip_flop.out_inv()
     }
 
+    /// Create a new half adder
     pub fn new(graph: &mut Graph, name: &str) -> Self {
         let input = graph.new_input(&format!("{}.input", name));
         let clear = graph.new_input(&format!("{}.clear", name));
@@ -102,6 +121,7 @@ impl HalfAdder {
     }
 }
 
+/// The higher-order bit memory and counting logic for the 74193
 #[derive(Debug, Getters)]
 pub struct FullAdder {
     up: Pin,
@@ -114,22 +134,32 @@ pub struct FullAdder {
 }
 
 impl FullAdder {
+    /// Input pin used for loading data
     pub fn input(&self) -> &Pin {
         &self.half_adder.input()
     }
+
+    /// Clear pin resets the bit to 0
     pub fn clear(&self) -> &Pin {
         self.half_adder.clear()
     }
+
+    /// Load pin causes bit to be set to state of `input`
     pub fn load(&self) -> &Pin {
         self.half_adder.load()
     }
+
+    /// The state of the bit
     pub fn output(&self) -> &Pin {
         self.half_adder.output()
     }
+
+    /// The inverted state of the bit
     pub fn out_inv(&self) -> &Pin {
         self.half_adder.out_inv()
     }
 
+    /// Create a new full adder
     pub fn new(graph: &mut Graph, name: &str) -> Self {
         let adder = Self {
             up: graph.new_input(&format!("{}.up", name)),
@@ -147,6 +177,9 @@ impl FullAdder {
     }
 }
 
+/// Implementation of the 74193 chip
+///
+/// Based on schematic from https://www.ti.com/lit/ds/symlink/sn54ls193-sp.pdf?ts=1649956332500
 #[derive(Getters)]
 pub struct Ic74193 {
     // inputs
@@ -170,38 +203,57 @@ pub struct Ic74193 {
 }
 
 impl Ic74193 {
+    /// The input pins (d1-d4)
     pub fn input(&self) -> [&Pin; 4] {
         [self.in1(), self.in2(), self.in3(), self.in4()]
     }
+
+    /// Input pin 1 (d1)
     pub fn in1(&self) -> &Pin {
         self.adder1.input()
     }
+
+    /// Input pin 2 (d2)
     pub fn in2(&self) -> &Pin {
         self.adder2.input()
     }
+
+    /// Input pin 3 (d3)
     pub fn in3(&self) -> &Pin {
         self.adder3.input()
     }
+
+    /// Input pin 4 (d4)
     pub fn in4(&self) -> &Pin {
         self.adder4.input()
     }
 
+    /// The output pins (q1-q4)
     pub fn output(&self) -> [&Pin; 4] {
         [self.out1(), self.out2(), self.out3(), self.out4()]
     }
+
+    /// Output pin 1 (q1)
     pub fn out1(&self) -> &Pin {
         self.adder1.output()
     }
+
+    /// Output pin 2 (q2)
     pub fn out2(&self) -> &Pin {
         self.adder2.output()
     }
+
+    /// Output pin 3 (q3)
     pub fn out3(&self) -> &Pin {
         self.adder3.output()
     }
+
+    /// Output pin 4 (q4)
     pub fn out4(&self) -> &Pin {
         self.adder4.output()
     }
 
+    /// Create a new Ic74193
     pub fn new(graph: &mut Graph, name: &str) -> Self {
         let make_name = |part| format!("{}.{}", name, part);
         let up_inv = not_gate(graph, &make_name("up_inv"));
@@ -283,12 +335,14 @@ impl Ic74193 {
     }
 }
 
+/// 8-bit counter made of a pair of 74193s
 pub struct Counter8Bit {
     counter1: Ic74193,
     counter2: Ic74193,
 }
 
 impl Counter8Bit {
+    /// Input pins for loading new data
     pub fn input(&self) -> [&Pin; 8] {
         [
             self.counter1.in1(),
@@ -302,22 +356,27 @@ impl Counter8Bit {
         ]
     }
 
+    /// Count up signal
     pub fn up(&self) -> &Pin {
         self.counter1.up()
     }
 
+    /// Count down signal
     pub fn down(&self) -> &Pin {
         self.counter1.down()
     }
 
+    /// Inverted load signal
     pub fn load_inv(&self) -> &Pin {
         self.counter1.load_inv()
     }
 
+    /// Clear signal
     pub fn clear(&self) -> &Pin {
         self.counter1.clear()
     }
 
+    /// Output data
     pub fn output(&self) -> [&Pin; 8] {
         [
             self.counter1.out1(),
@@ -331,14 +390,17 @@ impl Counter8Bit {
         ]
     }
 
+    /// Output carry
     pub fn carry(&self) -> &Pin {
         self.counter2.carry()
     }
 
+    /// Output borrow
     pub fn borrow(&self) -> &Pin {
         self.counter2.borrow()
     }
 
+    /// Create a new Counter8Bit
     pub fn new(graph: &mut Graph, name: &str) -> Self {
         let counter1 = Ic74193::new(graph, &format!("{}.counter1", name));
         let counter2 = Ic74193::new(graph, &format!("{}.counter2", name));
@@ -364,7 +426,8 @@ pub struct Counter16Bit {
 }
 
 impl Counter16Bit {
-    pub fn d(&self) -> [&Pin; 16] {
+    /// Input bits for loading data
+    pub fn input(&self) -> [&Pin; 16] {
         [
             &self.counter1.input()[0],
             &self.counter1.input()[1],
@@ -385,22 +448,27 @@ impl Counter16Bit {
         ]
     }
 
+    /// Count up signal
     pub fn up(&self) -> &Pin {
         self.counter1.up()
     }
 
+    /// Count down signal
     pub fn down(&self) -> &Pin {
         self.counter1.down()
     }
 
+    /// Inverted load signal
     pub fn load_inv(&self) -> &Pin {
         self.counter1.load_inv()
     }
 
+    /// Clear signal
     pub fn clear(&self) -> &Pin {
         self.counter1.clear()
     }
 
+    /// Output pins
     pub fn output(&self) -> [&Pin; 16] {
         [
             &self.counter1.output()[0],
@@ -422,14 +490,17 @@ impl Counter16Bit {
         ]
     }
 
+    /// Output carry
     pub fn carry(&self) -> &Pin {
         self.counter2.carry()
     }
 
+    /// Output borrow
     pub fn borrow(&self) -> &Pin {
         self.counter2.borrow()
     }
 
+    /// Create a new Counter16Bit
     pub fn new(graph: &mut Graph, name: &str) -> Self {
         let counter1 = Counter8Bit::new(graph, &format!("{}.counter1", name));
         let counter2 = Counter8Bit::new(graph, &format!("{}.counter2", name));
@@ -445,45 +516,78 @@ impl Counter16Bit {
     }
 }
 
+/// 32k x 8bit RAM modeled after the CY7C199
 pub struct IcCY7C199(Vec<Pin>);
 
 impl IcCY7C199 {
+    /// Inverse chip enable pin index
     const CE_INV: usize = 0;
+
+    /// Inverse output enable pin index
     const OE_INV: usize = 1;
+
+    /// Inverse write enable pin index
     const WE_INV: usize = 2;
 
+    /// IO pin starting index
     const IO_START: usize = 3;
+
+    /// Size of word (number of IO pins)
     const WORD_SIZE: usize = 8;
+
+    /// IO pin ending index
     const IO_END: usize = Self::IO_START + Self::WORD_SIZE;
 
+    /// Address pin starting index
     const ADDR_START: usize = Self::IO_END;
+
+    /// Address width
     const ADDR_SIZE: usize = 15;
+
+    /// Address pin ending index
     const ADDR_END: usize = Self::ADDR_START + Self::ADDR_SIZE;
 
+    /// Total number of pins in part
     const NUM_PINS: usize = Self::ADDR_END;
 
+    /// Total number of words in RAM
     const NUM_WORDS: usize = 1 << Self::ADDR_SIZE;
 
+    /// Inverted chip enable
     pub fn ce_inv(&self) -> &Pin {
         &self.0[Self::CE_INV]
     }
 
+    /// Inverted output enable
     pub fn oe_inv(&self) -> &Pin {
         &self.0[Self::OE_INV]
     }
 
+    /// Inverted write enable
     pub fn we_inv(&self) -> &Pin {
         &self.0[Self::WE_INV]
     }
 
+    /// I/O pins
+    ///
+    /// Pins are set to HiZ if:
+    ///     `ce_inv` is High, or
+    ///     `oe_inv` and `we_inv` are both Low
+    ///
+    /// Otherwise, pins are set to output the contents of ram at the current address if `oe_inv` is
+    ///     Low
+    ///
+    /// Otherwise, pins are net to input and their value is written into ram if `we_inv` is Low
     pub fn io(&self) -> &[Pin] {
         &self.0[Self::IO_START..Self::IO_END]
     }
 
+    /// Address pins
     pub fn addr(&self) -> &[Pin] {
         &self.0[Self::ADDR_START..Self::ADDR_END]
     }
 
+    /// Create a new RAM part
     pub fn new(graph: &mut Graph, name: &str) -> Self {
         let mut states = [PinState::INPUT; Self::NUM_PINS];
         Self::set_io(&mut states, PinState::HiZ);
@@ -497,10 +601,12 @@ impl IcCY7C199 {
         Self(pins)
     }
 
+    /// Sets the IO pins to a given state
     fn set_io(states: &mut [PinState], val: PinState) {
         states[Self::IO_START..Self::IO_END].fill(val);
     }
 
+    /// Part updater
     fn update(ram: &mut Vec<u8>, pins: &mut [PinState]) {
         let ce = !pins[Self::CE_INV];
         let oe = !pins[Self::OE_INV];
@@ -523,6 +629,7 @@ impl IcCY7C199 {
         }
     }
 
+    /// Sets the pins to output the given value
     fn set_output(pins: &mut [PinState], val: usize) {
         for (i, state) in pins.iter_mut().enumerate() {
             let bit = val & (1 << i);
@@ -531,6 +638,7 @@ impl IcCY7C199 {
         }
     }
 
+    /// Changes the pins to inputs and sets them to the given value
     fn set_input(pins: &mut [PinState], val: usize) {
         for (i, state) in pins.iter_mut().enumerate() {
             let bit = val & (1 << i);

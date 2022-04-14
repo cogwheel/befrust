@@ -21,36 +21,43 @@ pub struct Pin {
 }
 
 impl Pin {
+    /// The name of the pin
     pub fn name(&self) -> &str {
         &self.name
     }
 
+    /// The compute graph that owns the pin
     #[inline(always)]
     pub fn graph(&self) -> Graph {
         self.graph.clone()
     }
 
+    /// Gets the current state of the pin
     #[inline(always)]
     pub fn state(&self) -> PinState {
         self.graph().get_state(self)
     }
 
+    /// Creates a connection between this and the other pin
     #[inline(always)]
     pub fn connect(&self, other: &Pin) {
         self.graph().connect(self, other);
     }
 
+    /// Creates a connection among this and a group of other pins
     #[inline(always)]
     pub fn connect_all(&self, others: &[&Pin]) {
         self.graph().connect_all(others);
         self.graph().connect(self, others[0]);
     }
 
+    /// Sets the pin to output the given signal
     #[inline(always)]
     pub fn set_output(&mut self, signal: Signal) {
         self.graph().set_output(self, signal);
     }
 
+    /// Flips the output signal of the pin for one tick
     #[inline(always)]
     pub fn flash_output(&mut self) {
         self.graph().flash_output(self);
@@ -58,18 +65,21 @@ impl Pin {
 }
 
 impl ToSignal for Pin {
+    /// Gets the current signal for the pin
     fn sig(&self) -> Signal {
         self.graph.clone().get_signal(self)
     }
 }
 
 impl ToSignal for &Pin {
+    /// Gets the current signal for the pin
     fn sig(&self) -> Signal {
         (*self).sig()
     }
 }
 
 impl ToSignal for &&Pin {
+    /// Gets the current signal for the pin
     fn sig(&self) -> Signal {
         (**self).sig()
     }
@@ -267,14 +277,17 @@ impl GraphImpl {
 }
 
 impl Graph {
+    /// Creates a new compute graph
     pub fn new() -> Self {
         Self(Rc::new(RefCell::new(GraphImpl::default())))
     }
 
+    /// Retrieves the underlying implementation
     fn g(&self) -> RefMut<GraphImpl> {
         (*self.0).borrow_mut()
     }
 
+    /// Creates a new pin with the given name and state
     pub fn new_pin(&mut self, name: String, state: PinState) -> Pin {
         Pin {
             id: self.g().new_pin(state, name.clone()),
@@ -283,24 +296,32 @@ impl Graph {
         }
     }
 
+    /// Creates a new pin with default input state
     pub fn new_input(&mut self, name: &str) -> Pin {
-        self.new_pin(name.to_owned(), PinState::Input(Signal::default()))
+        self.new_pin(name.to_owned(), PinState::INPUT)
     }
 
+    /// Creates a new output pin with the given signal
     pub fn new_output(&mut self, name: &str, signal: Signal) -> Pin {
         self.new_pin(name.to_owned(), PinState::Output(signal))
     }
 
+    /// Connects two pins together
+    ///
+    /// The node connected to `b` will be merged into the node connected to pin `a`. In other words,
+    /// all pins already connected to a and b will now be connected to each other
     pub fn connect(&mut self, a: &Pin, b: &Pin) {
         self.g().connect(a, b);
     }
 
+    /// Connects given pairs of pins to each other
     pub fn connect_pairs(&mut self, pairs: &[(&Pin, &Pin)]) {
         for (one, other) in pairs.iter() {
             self.connect(one, other);
         }
     }
 
+    /// Connects all pins to each other
     pub fn connect_all(&mut self, pins: &[&Pin]) {
         let (first, rest) = pins.split_first().expect("Not enough pins to connect");
         for pin in rest {
@@ -308,6 +329,7 @@ impl Graph {
         }
     }
 
+    /// Creates a set of contiguous pins
     pub fn new_pins(&mut self, name: &str, new_states: &[PinState]) -> Vec<Pin> {
         new_states
             .iter()
@@ -333,19 +355,34 @@ impl Graph {
         self.new_pins(name, new_states)
     }
 
+    /// Calls the updaters for all parts with their current pin states
     pub fn update_parts(&mut self) {
         self.g().update_parts();
     }
 
+    /// Propagates signals from output pins to Nodes, and from nodes to input pins
+    ///
+    /// Returns the number of nodes that were updated to a new signal
     pub fn update_nodes(&mut self) -> usize {
         self.g().update_nodes()
     }
 
+    /// A full pass of updating parts then nodes
+    ///
+    /// Returns the number of nodes that were updated to a new signal
     pub fn tick(&mut self) -> usize {
         self.update_parts();
         self.update_nodes()
     }
 
+    /// Ticks the compute graph until reaching steady state
+    ///
+    /// Steady state is either:
+    ///     0 nodes updated with a new signal, or
+    ///     A cycle is detected
+    ///
+    /// Note: this is pretty slow since it hashes all the pin states each tick and keeps a hashset
+    /// of the results for detecting cycles.
     pub fn run(&mut self) -> RunStats {
         let mut stats = RunStats {
             ticks: 1,
@@ -378,14 +415,17 @@ impl Graph {
         stats
     }
 
+    /// Get the state of the pin
     pub fn get_state(&self, pin: &Pin) -> PinState {
         self.0.borrow().pin_states[pin.id]
     }
 
+    /// Get the signal of the pin
     pub fn get_signal(&self, pin: &Pin) -> Signal {
         self.get_state(pin).into()
     }
 
+    /// Set an output pin to have the given signal
     pub fn set_output(&mut self, pin: &mut Pin, signal: Signal) {
         let state = self.g().pin_states[pin.id];
         assert!(matches!(state, PinState::Output(_)));
@@ -393,6 +433,7 @@ impl Graph {
         self.g().pin_states[pin.id] = PinState::Output(signal);
     }
 
+    /// Change the output pin to its logical inverse
     pub fn flip_output(&mut self, pin: &mut Pin) {
         let state = self.g().pin_states[pin.id];
         assert!(matches!(state, PinState::Output(_)));
@@ -408,6 +449,9 @@ impl Graph {
         updates
     }
 
+    /// Flips the output, runs, flips back, runs
+    ///
+    /// Useful for generating clock pulses
     pub fn pulse_output(&mut self, pin: &mut Pin) -> RunStats {
         self.flip_output(pin);
         let stats = self.run();
@@ -415,10 +459,12 @@ impl Graph {
         stats + self.run()
     }
 
+    /// Prints all the pins that are not connected to any others
     pub fn print_orphans(&self) {
         self.g().print_orphans()
     }
 
+    /// Prints all the nodes in the graph
     pub fn print_nodes(&self) {
         self.g().print_nodes()
     }
