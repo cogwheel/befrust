@@ -4,10 +4,10 @@
 
 Get what's already here in ship-shape.
 
-* [ ] Finish renaming single-letter pins
-  * [ ] FullAdder
-  * [ ] ...
+* [X] Finish renaming single-letter pins
+  * [X] FullAdder
 * [ ] Comprehensive tests
+  * [ ] tests succeeded when ic74193's `output()` returned `dN*` instead of `qN*`
 * [ ] Finish data block
   * [ ] Fix data counter
   * [ ] Add clear clock
@@ -18,6 +18,7 @@ Get what's already here in ship-shape.
 
 Make the bfpu, including any necessary or helpful updates to the compute graph
 
+* [ ] Helper to connect busses (like connect_many)
 * [ ] Clocks - 3 phase: instruction -> count -> store
 * [ ] Randomize RAM contents - need some re-init mechanism (chonky... might be helped by separating
   graph from execution)

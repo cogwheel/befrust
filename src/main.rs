@@ -39,7 +39,7 @@ impl DataBlock {
     }
 
     pub fn zero(&self) -> &Pin {
-        self.zero.q()
+        self.zero.output()
     }
 
     pub fn a(&self) -> [&Pin; 16] {
@@ -96,32 +96,32 @@ impl DataBlock {
         let reg_count = &count & &d_ce;
         let reg_up = nand_gate(graph, "reg_up");
         let reg_down = nand_gate(graph, "reg_down");
-        graph.connect_all(&[&reg_count, reg_up.a(), reg_down.a()]);
-        graph.connect(&up, reg_up.b());
-        graph.connect(&down, reg_down.b());
-        graph.connect(reg_up.q(), reg.up());
-        graph.connect(reg_down.q(), reg.down());
+        graph.connect_all(&[&reg_count, reg_up.input_a(), reg_down.input_a()]);
+        graph.connect(&up, reg_up.input_b());
+        graph.connect(&down, reg_down.input_b());
+        graph.connect(reg_up.output(), reg.up());
+        graph.connect(reg_down.output(), reg.down());
 
         let reg_load = nand_gate(graph, "reg_load");
-        graph.connect(&store, reg_load.a());
-        graph.connect(&d_ce, reg_load.b());
-        graph.connect(reg_load.q(), reg.load_inv());
+        graph.connect(&store, reg_load.input_a());
+        graph.connect(&d_ce, reg_load.input_b());
+        graph.connect(reg_load.output(), reg.load_inv());
 
         let ptr_count = &count & &p_ce;
         let ptr_up = nand_gate(graph, "ptr_up");
         // TODO: ptr_up = nor_gate(&up & &ptr_count, &clear_ck & &reset)
         let ptr_down = nand_gate(graph, "ptr_down");
-        graph.connect_all(&[&ptr_count, ptr_down.a(), ptr_up.a()]);
-        graph.connect(&up, ptr_up.b());
-        graph.connect(&down, ptr_down.b());
-        graph.connect(ptr_up.q(), ptr.up());
-        graph.connect(ptr_down.q(), ptr.down());
+        graph.connect_all(&[&ptr_count, ptr_down.input_a(), ptr_up.input_a()]);
+        graph.connect(&up, ptr_up.input_b());
+        graph.connect(&down, ptr_down.input_b());
+        graph.connect(ptr_up.output(), ptr.up());
+        graph.connect(ptr_down.output(), ptr.down());
 
         let ram_we = nor_gate(graph, "ram_we");
         let write = &store & &d_ce;
-        graph.connect(&reset, ram_we.a());
-        graph.connect(&write, ram_we.b());
-        graph.connect(ram_we.q(), ram.we_inv());
+        graph.connect(&reset, ram_we.input_a());
+        graph.connect(&write, ram_we.input_b());
+        graph.connect(ram_we.output(), ram.we_inv());
 
         DataBlock {
             zero,
