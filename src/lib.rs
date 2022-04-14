@@ -10,12 +10,10 @@ pub use graph::*;
 pub use ic::*;
 
 /// The logical value for a given node, pin, etc.
-///
-/// TODO: supporting busses might mean changing this to some kind of bitset
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Hash)]
 pub enum Signal {
     /// No signal present, high impedance, etc.
-    Off, // TODO: maybe rename something else less confusing with Low
+    Off,
 
     /// Logical Low (0, False, etc.)
     Low,
@@ -52,7 +50,6 @@ impl ToSignal for Signal {
     }
 }
 
-// TODO: surely there's a magic way to do this
 impl ToSignal for &Signal {
     fn sig(&self) -> Signal {
         **self
@@ -87,12 +84,11 @@ impl BusValue {
     pub fn sig(&self, i: usize) -> Signal {
         if (self.error >> i) & 1 == 1 {
             Signal::Error
-        } else if (self.val >> i ) & 1 == 1 {
+        } else if (self.val >> i) & 1 == 1 {
             Signal::High
         } else {
             Signal::Low
         }
-        // TODO: figure out how to have Signal::Off on buses
     }
 }
 
@@ -154,13 +150,11 @@ impl Not for Signal {
     /// Logical Not
     ///
     /// The behavior for Off is somewhat arbitrary. Logisim, e.g., returns Error.
-    ///
-    /// TODO: consider removing the ops for signals if the behavior will depend on the pin's pull
     fn not(self) -> Signal {
         match self {
             Signal::High => Signal::Low,
             Signal::Low => Signal::High,
-            Signal::Off => Signal::Off, // TODO: support pull
+            Signal::Off => Signal::Off,
             _ => Signal::Error,
         }
     }
@@ -252,15 +246,13 @@ impl BitXorAssign for Signal {
 ///
 /// Parts update their PinStates each tick. This allows connections to change between input, output,
 /// and high impedance states (e.g. for chip enable, bidirectional ports, etc.)
-///
-// TODO: rename to Port? might confuse with Part
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Hash)]
 pub enum PinState {
     /// High impedance, acting as neither an input nor an output. Logically Off
     HiZ,
 
     /// An input receives its signal from the connected Node
-    Input(Signal), // TODO: PullUp/Down
+    Input(Signal),
 
     /// An output places its signal onto the connected Node
     Output(Signal),
@@ -278,7 +270,6 @@ impl PinState {
         [Signal::Low, Signal::Off].contains(&self.sig())
     }
 
-    /// TODO: add others?
     pub fn is_high(&self) -> bool {
         self.sig() == Signal::High
     }
@@ -357,7 +348,7 @@ pub fn test_bus_val() {
 
     sig_bus[2] = Signal::Error;
 
-    assert_eq!(sig_bus.iter().val(), BusValue{ val: 27, error: 4 });
+    assert_eq!(sig_bus.iter().val(), BusValue { val: 27, error: 4 });
 
     let mut state_bus = [
         PinState::HiZ,
@@ -369,7 +360,7 @@ pub fn test_bus_val() {
 
     state_bus[0] = PinState::Output(Signal::Error);
 
-    assert_eq!(state_bus.iter().val(), BusValue{ val: 2, error: 1 });
+    assert_eq!(state_bus.iter().val(), BusValue { val: 2, error: 1 });
 }
 
 #[cfg(test)]

@@ -1,5 +1,5 @@
-use std::iter::zip;
 use crate::*;
+use std::iter::zip;
 
 use derive_getters::Getters;
 
@@ -256,7 +256,6 @@ pub fn nor_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
     })
 }
 
-// TODO: Unify bus gates and nary gates
 pub struct BusBuffer(Vec<Pin>);
 
 impl BusBuffer {
@@ -513,7 +512,6 @@ mod test_gates {
         for i in 0..5 {
             assert_low!(buffer.output()[i]);
         }
-
 
         inputs[2].set_output(Signal::High);
         graph.run();

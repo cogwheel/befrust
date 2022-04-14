@@ -109,8 +109,6 @@ pub struct FullAdder {
     up_cond: Pin,
     down_cond: Pin,
 
-    // TODO: figure out how to do #[getter(forward)]
-    // TODO: figure out how to contact the author of derive-getters
     #[getter(skip)]
     half_adder: HalfAdder,
 }
@@ -287,7 +285,6 @@ pub struct Counter8Bit {
 impl Counter8Bit {
     pub fn input(&self) -> [&Pin; 8] {
         [
-            // TODO: should these be little-endian instead?
             self.counter1.d1(),
             self.counter1.d2(),
             self.counter1.d3(),
@@ -363,7 +360,6 @@ pub struct Counter16Bit {
 impl Counter16Bit {
     pub fn d(&self) -> [&Pin; 16] {
         [
-            // TODO: unghh... there is probably a macro that can help
             &self.counter1.input()[0],
             &self.counter1.input()[1],
             &self.counter1.input()[2],
@@ -486,7 +482,6 @@ impl IcCY7C199 {
         let mut states = [PinState::INPUT; Self::NUM_PINS];
         Self::set_io(&mut states, PinState::HiZ);
 
-        // TODO: randomize
         let mut ram = vec![0xff; Self::NUM_WORDS];
 
         let pins = graph.new_part(name, &states, move |pins| {
