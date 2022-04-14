@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Formatter};
 use befrust::*;
 use derive_getters::Getters;
 use std::iter::zip;
@@ -22,6 +23,16 @@ pub struct DataBlock {
     zero: NaryGate,
 }
 
+impl Debug for DataBlock {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DataBlock")
+            .field("d", &self.d().iter().val())
+            .field("a", &self.a().iter().val())
+            .field("zero", &self.zero().sig())
+            .finish()
+    }
+}
+
 impl DataBlock {
     pub fn d(&self) -> &[Pin] {
         &self.bus.q()
@@ -32,7 +43,7 @@ impl DataBlock {
     }
 
     pub fn a(&self) -> [&Pin; 16] {
-        self.ptr.q()
+        self.ptr.output()
     }
 
     pub fn new(graph: &mut Graph, name: &str) -> Self {
@@ -43,17 +54,17 @@ impl DataBlock {
 
         let buf = TristateBuffer::new(graph, &make_name("buf"), 8);
 
-        let zero = nor_nary(graph, &make_name("zero"), ram.d().len());
+        let zero = nor_nary(graph, &make_name("zero"), ram.io().len());
 
         let bus = Buffer::new(graph, &make_name("bus"), 8);
 
-        for (ram_pin, ptr_pin) in zip(ram.a(), ptr.d()) {
+        for (ram_pin, ptr_pin) in zip(ram.addr(), ptr.output()) {
             ram_pin.connect(ptr_pin);
         }
 
         for i in 0..8 {
-            graph.connect_all(&[&bus.a()[i], &ram.d()[i], reg.d()[i], &buf.q()[i], &zero.a()[i]]);
-            graph.connect(&reg.q()[i], &buf.a()[i]);
+            graph.connect_all(&[&bus.input()[i], &ram.io()[i], reg.input()[i], &buf.output()[i], &zero.input()[i]]);
+            graph.connect(&reg.output()[i], &buf.input()[i]);
         }
 
         let up = graph.new_input(&make_name("up"));
@@ -123,6 +134,8 @@ impl DataBlock {
 
 // TODO: make brainfuck computer
 fn main() {
+    #![allow(unused_assignments, unused_mut)]
+
     let mut graph = Graph::new();
 
     let mut up = graph.new_output("up", Signal::High);
@@ -148,42 +161,69 @@ fn main() {
         (&d_ce, d_block.d_ce()),
         (&reset, d_block.reset()),
     ]);
-    println!("reg {:?}", d_block.d().iter().val());
+    println!("{:?}", d_block);
 
-    graph.tick();
-
-    //return;
+    graph.run();
 
     // Test data reg
-    println!("reg {:?}", d_block.d().iter().val());
+    println!("{:?}", d_block);
 
     reset.set_output(Signal::Low);
     d_ce.set_output(Signal::High);
-    count.set_output(Signal::High);
-
     graph.run();
+    println!("d_ce high: {:?}", d_block);
 
-    println!("reg {:?}", d_block.d().iter().val());
+    count.set_output(Signal::High);
+    graph.run();
+    println!("count high: {:?}", d_block);
 
     count.set_output(Signal::Low);
     graph.run();
+    println!("count low: {:?}", d_block);
+
     count.set_output(Signal::High);
     graph.run();
+    println!("count high: {:?}", d_block);
+
     count.set_output(Signal::Low);
     graph.run();
 
-    println!("reg {:?}", d_block.d().iter().val());
+    println!("count low: {:?}", d_block);
+
 
     // test data ptr
-    println!("ptr {:?}", d_block.a().iter().val());
-
     d_ce.set_output(Signal::Low);
+    graph.run();
+    println!("d_ce low: {:?}", d_block);
+
     p_ce.set_output(Signal::High);
+    graph.run();
+    println!("p_ce high: {:?}", d_block);
+
+    graph.pulse_output(&mut count);
+
+    println!("ptr pulse 1{:?}", d_block);
+    count.set_output(Signal::High);
+    graph.run();
+    count.set_output(Signal::Low);
+    graph.run();
+    println!("ptr pulse 2 {:?}", d_block);
+
+    up.set_output(Signal::Low);
 
     count.set_output(Signal::High);
     graph.run();
     count.set_output(Signal::Low);
     graph.run();
 
-    println!("ptr {:?}", d_block.a().iter().val());
+    graph.pulse_output(&mut count);
+    graph.pulse_output(&mut count);
+    graph.pulse_output(&mut count);
+
+    count.set_output(Signal::High);
+    graph.run();
+    count.set_output(Signal::Low);
+    graph.run();
+
+    println!("ptr down 5{:?}", d_block);
 }

@@ -4,7 +4,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
-use std::ops::Range;
+use std::ops::{Add, Range};
 use std::rc::Rc;
 
 pub type PinId = usize;
@@ -136,7 +136,7 @@ struct GraphImpl {
 }
 
 /// Update and cycle information for a run of the graph
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct RunStats {
     /// Number of ticks to reach steady state
     pub ticks: usize,
@@ -148,6 +148,18 @@ pub struct RunStats {
 
     /// Number of ticks in the final cycle
     pub cycle: usize,
+}
+
+impl Add for RunStats {
+    type Output = RunStats;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        RunStats{
+            ticks: self.ticks + rhs.ticks,
+            updates: self.updates + rhs.updates,
+            cycle: self.cycle + rhs.cycle,
+        }
+    }
 }
 
 impl GraphImpl {
@@ -189,6 +201,8 @@ impl GraphImpl {
     }
 
     pub fn update_nodes(&mut self) -> usize {
+        // TODO: make a debug/trace mode
+        #![allow(unused_assignments, unused_variables)]
         let mut update_count = 0;
         for (node_id, node) in self.nodes.iter_mut() {
             let mut new_signal = node.signal;
@@ -389,17 +403,26 @@ impl Graph {
         self.g().pin_states[pin.id] = PinState::Output(signal);
     }
 
-    /// Flips the state of the given output pin for one tick
-    pub fn flash_output(&mut self, pin: &mut Pin) -> usize {
+    pub fn flip_output(&mut self, pin: &mut Pin) {
         let state = self.g().pin_states[pin.id];
         assert!(matches!(state, PinState::Output(_)));
+        self.g().pin_states[pin.id] = PinState::Output(!state);
+    }
 
-        let signal = state.sig();
-        self.g().pin_states[pin.id] = PinState::Output(!signal);
+    /// Flips the state of the given output pin for one tick
+    pub fn flash_output(&mut self, pin: &mut Pin) -> usize {
+        self.flip_output(pin);
         let updates = self.tick();
-        self.g().pin_states[pin.id] = PinState::Output(signal);
+        self.flip_output(pin);
 
         updates
+    }
+
+    pub fn pulse_output(&mut self, pin: &mut Pin) -> RunStats {
+        self.flip_output(pin);
+        let stats = self.run();
+        self.flip_output(pin);
+        stats + self.run()
     }
 
     pub fn print_orphans(&self) {

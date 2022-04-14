@@ -59,7 +59,7 @@ impl ToSignal for &Signal {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Default, PartialEq, PartialOrd)]
 pub struct BusValue {
     val: usize,
     error: usize,
@@ -124,11 +124,10 @@ where
     T::Item: ToSignal,
 {
     fn val(self) -> BusValue {
-        let mut bus_val = BusValue { val: 0, error: 0 };
+        let mut bus_val = BusValue::default();
         for (i, sig) in self.map(|x| x.sig()).enumerate() {
-            assert_ne!(
-                i as u32,
-                usize::BITS,
+            assert!(
+                (i as u32) < usize::BITS,
                 "Bus has more than usize::BITS ({}) bits",
                 usize::BITS
             );

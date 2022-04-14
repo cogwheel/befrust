@@ -182,7 +182,7 @@ impl BitXor for Pin {
 pub struct NaryGate(Vec<Pin>);
 
 impl NaryGate {
-    pub fn a(&self) -> &[Pin] {
+    pub fn input(&self) -> &[Pin] {
         &self.0[1..]
     }
     pub fn n(&self, n: usize) -> &Pin {
@@ -256,7 +256,7 @@ pub fn nor_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
 pub struct Buffer(Vec<Pin>);
 
 impl Buffer {
-    pub fn a(&self) -> &[Pin] {
+    pub fn input(&self) -> &[Pin] {
         &self.0[self.width()..2 * self.width()]
     }
 
@@ -289,11 +289,11 @@ impl Buffer {
 pub struct TristateBuffer(Vec<Pin>);
 
 impl TristateBuffer {
-    pub fn a(&self) -> &[Pin] {
+    pub fn input(&self) -> &[Pin] {
         &self.0[self.width()..2 * self.width()]
     }
 
-    pub fn q(&self) -> &[Pin] {
+    pub fn output(&self) -> &[Pin] {
         &self.0[0..self.width()]
     }
 

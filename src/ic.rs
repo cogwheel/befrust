@@ -285,7 +285,7 @@ pub struct Counter8Bit {
 }
 
 impl Counter8Bit {
-    pub fn d(&self) -> [&Pin; 8] {
+    pub fn input(&self) -> [&Pin; 8] {
         [
             // TODO: should these be little-endian instead?
             self.counter1.d1(),
@@ -315,7 +315,7 @@ impl Counter8Bit {
         self.counter1.clear()
     }
 
-    pub fn q(&self) -> [&Pin; 8] {
+    pub fn output(&self) -> [&Pin; 8] {
         [
             self.counter1.q1(),
             self.counter1.q2(),
@@ -364,22 +364,22 @@ impl Counter16Bit {
     pub fn d(&self) -> [&Pin; 16] {
         [
             // TODO: unghh... there is probably a macro that can help
-            &self.counter1.d()[0],
-            &self.counter1.d()[1],
-            &self.counter1.d()[2],
-            &self.counter1.d()[3],
-            &self.counter1.d()[4],
-            &self.counter1.d()[5],
-            &self.counter1.d()[6],
-            &self.counter1.d()[7],
-            &self.counter2.d()[0],
-            &self.counter2.d()[1],
-            &self.counter2.d()[2],
-            &self.counter2.d()[3],
-            &self.counter2.d()[4],
-            &self.counter2.d()[5],
-            &self.counter2.d()[6],
-            &self.counter2.d()[7],
+            &self.counter1.input()[0],
+            &self.counter1.input()[1],
+            &self.counter1.input()[2],
+            &self.counter1.input()[3],
+            &self.counter1.input()[4],
+            &self.counter1.input()[5],
+            &self.counter1.input()[6],
+            &self.counter1.input()[7],
+            &self.counter2.input()[0],
+            &self.counter2.input()[1],
+            &self.counter2.input()[2],
+            &self.counter2.input()[3],
+            &self.counter2.input()[4],
+            &self.counter2.input()[5],
+            &self.counter2.input()[6],
+            &self.counter2.input()[7],
         ]
     }
 
@@ -399,24 +399,24 @@ impl Counter16Bit {
         self.counter1.clear()
     }
 
-    pub fn q(&self) -> [&Pin; 16] {
+    pub fn output(&self) -> [&Pin; 16] {
         [
-            &self.counter1.q()[0],
-            &self.counter1.q()[1],
-            &self.counter1.q()[2],
-            &self.counter1.q()[3],
-            &self.counter1.q()[4],
-            &self.counter1.q()[5],
-            &self.counter1.q()[6],
-            &self.counter1.q()[7],
-            &self.counter2.q()[0],
-            &self.counter2.q()[1],
-            &self.counter2.q()[2],
-            &self.counter2.q()[3],
-            &self.counter2.q()[4],
-            &self.counter2.q()[5],
-            &self.counter2.q()[6],
-            &self.counter2.q()[7],
+            &self.counter1.output()[0],
+            &self.counter1.output()[1],
+            &self.counter1.output()[2],
+            &self.counter1.output()[3],
+            &self.counter1.output()[4],
+            &self.counter1.output()[5],
+            &self.counter1.output()[6],
+            &self.counter1.output()[7],
+            &self.counter2.output()[0],
+            &self.counter2.output()[1],
+            &self.counter2.output()[2],
+            &self.counter2.output()[3],
+            &self.counter2.output()[4],
+            &self.counter2.output()[5],
+            &self.counter2.output()[6],
+            &self.counter2.output()[7],
         ]
     }
 
@@ -474,11 +474,11 @@ impl IcCY7C199 {
         &self.0[Self::WE_INV]
     }
 
-    pub fn d(&self) -> &[Pin] {
+    pub fn io(&self) -> &[Pin] {
         &self.0[Self::IO_START..Self::IO_END]
     }
 
-    pub fn a(&self) -> &[Pin] {
+    pub fn addr(&self) -> &[Pin] {
         &self.0[Self::ADDR_START..Self::ADDR_END]
     }
 
@@ -719,7 +719,7 @@ mod test_counter {
         clear.set_output(Signal::Low);
         graph.run();
         assert_sigs(
-            &counter.q(),
+            &counter.output(),
             &[
                 Signal::Low,
                 Signal::Low,
@@ -741,7 +741,7 @@ mod test_counter {
         graph.run();
 
         assert_sigs(
-            &counter.q(),
+            &counter.output(),
             &[
                 Signal::Low,
                 Signal::High,
@@ -760,7 +760,7 @@ mod test_counter {
         }
 
         assert_sigs(
-            &counter.q(),
+            &counter.output(),
             &[
                 Signal::High,
                 Signal::Low,
@@ -795,7 +795,7 @@ mod test_counter {
         graph.run();
         clear.set_output(Signal::Low);
         graph.run();
-        assert_sigs(&counter.q(), &[Signal::Low; 16]);
+        assert_sigs(&counter.output(), &[Signal::Low; 16]);
 
         up.set_output(Signal::Low);
         graph.run();
@@ -806,7 +806,7 @@ mod test_counter {
         graph.run();
 
         assert_sigs(
-            &counter.q(),
+            &counter.output(),
             &[
                 Signal::Low,
                 Signal::High,
@@ -833,7 +833,7 @@ mod test_counter {
         }
 
         assert_sigs(
-            &counter.q(),
+            &counter.output(),
             &[
                 Signal::High,
                 Signal::Low,
@@ -887,7 +887,7 @@ mod test_ram {
         let ram = IcCY7C199::new(&mut graph, "d_ram");
 
         graph.run();
-        assert_states(ram.d(), &[PinState::HiZ; 8]);
+        assert_states(ram.io(), &[PinState::HiZ; 8]);
 
         let ce_inv = graph.new_output("ce_inv", Signal::Low);
         let mut oe_inv = graph.new_output("oe_inv", Signal::Low);
@@ -900,10 +900,10 @@ mod test_ram {
 
         graph.run();
 
-        assert_outputs(ram.d());
+        assert_outputs(ram.io());
 
         let mut d = graph.new_pins("d", &[PinState::Output(Signal::Low); 8]);
-        for (one, other) in zip(&d, ram.d()) {
+        for (one, other) in zip(&d, ram.io()) {
             graph.connect(one, other);
         }
 
@@ -913,14 +913,14 @@ mod test_ram {
         we_inv.set_output(Signal::Low);
         graph.run();
 
-        assert_inputs(ram.d());
+        assert_inputs(ram.io());
 
         we_inv.set_output(Signal::High);
         oe_inv.set_output(Signal::Low);
         graph.run();
 
         let mut expected_outputs = [PinState::Output(Signal::Low); 8];
-        assert_states(ram.d(), &expected_outputs);
+        assert_states(ram.io(), &expected_outputs);
 
         d[2].set_output(Signal::High);
         expected_outputs[2] = PinState::Output(Signal::High);
@@ -931,17 +931,17 @@ mod test_ram {
         oe_inv.set_output(Signal::Low);
         graph.run();
 
-        assert_states(ram.d(), &expected_outputs);
+        assert_states(ram.io(), &expected_outputs);
 
         let mut a2 = graph.new_output("a2", Signal::High);
-        graph.connect(&a2, &ram.a()[2]);
+        graph.connect(&a2, &ram.addr()[2]);
         graph.run();
 
-        assert_states(ram.d(), &[PinState::Output(Signal::High); 8]);
+        assert_states(ram.io(), &[PinState::Output(Signal::High); 8]);
 
         a2.set_output(Signal::Low);
         graph.run();
 
-        assert_states(ram.d(), &expected_outputs);
+        assert_states(ram.io(), &expected_outputs);
     }
 }
