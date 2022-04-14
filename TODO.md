@@ -4,10 +4,10 @@
 
 Get what's already here in ship-shape.
 
-* [ ] Finish renaming single-letter pins
-  * [ ] FullAdder
-  * [ ] ...
+* [X] Finish renaming single-letter pins
+  * [X] FullAdder
 * [ ] Comprehensive tests
+  * [ ] tests succeeded when ic74193's `output()` returned `dN*` instead of `qN*`
 * [ ] Finish data block
   * [ ] Fix data counter
   * [ ] Add clear clock

@@ -68,31 +68,36 @@ impl BinaryGate {
 
 pub fn and_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     BinaryGate::new(graph, name, |pins| {
-        pins[BinaryGate::OUTPUT] = PinState::Output(pins[BinaryGate::INPUT_A] & pins[BinaryGate::INPUT_B]);
+        pins[BinaryGate::OUTPUT] =
+            PinState::Output(pins[BinaryGate::INPUT_A] & pins[BinaryGate::INPUT_B]);
     })
 }
 
 pub fn nand_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     BinaryGate::new(graph, name, |pins| {
-        pins[BinaryGate::OUTPUT] = PinState::Output(!(pins[BinaryGate::INPUT_A] & pins[BinaryGate::INPUT_B]));
+        pins[BinaryGate::OUTPUT] =
+            PinState::Output(!(pins[BinaryGate::INPUT_A] & pins[BinaryGate::INPUT_B]));
     })
 }
 
 pub fn or_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     BinaryGate::new(graph, name, |pins| {
-        pins[BinaryGate::OUTPUT] = PinState::Output(pins[BinaryGate::INPUT_A] | pins[BinaryGate::INPUT_B]);
+        pins[BinaryGate::OUTPUT] =
+            PinState::Output(pins[BinaryGate::INPUT_A] | pins[BinaryGate::INPUT_B]);
     })
 }
 
 pub fn nor_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     BinaryGate::new(graph, name, |pins| {
-        pins[BinaryGate::OUTPUT] = PinState::Output(!(pins[BinaryGate::INPUT_A] | pins[BinaryGate::INPUT_B]));
+        pins[BinaryGate::OUTPUT] =
+            PinState::Output(!(pins[BinaryGate::INPUT_A] | pins[BinaryGate::INPUT_B]));
     })
 }
 
 pub fn xor_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     BinaryGate::new(graph, name, |pins| {
-        pins[BinaryGate::OUTPUT] = PinState::Output(pins[BinaryGate::INPUT_A] ^ pins[BinaryGate::INPUT_B]);
+        pins[BinaryGate::OUTPUT] =
+            PinState::Output(pins[BinaryGate::INPUT_A] ^ pins[BinaryGate::INPUT_B]);
     })
 }
 

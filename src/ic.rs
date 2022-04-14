@@ -59,7 +59,7 @@ impl TFlipFlop {
 
 #[derive(Debug, Getters)]
 pub struct HalfAdder {
-    d: Pin,
+    input: Pin,
     clear: Pin,
     load: Pin,
 
@@ -79,22 +79,22 @@ impl HalfAdder {
     }
 
     pub fn new(graph: &mut Graph, name: &str) -> Self {
-        let d = graph.new_input(&format!("{}.d", name));
+        let input = graph.new_input(&format!("{}.input", name));
         let clear = graph.new_input(&format!("{}.clear", name));
         let load = graph.new_input(&format!("{}.load", name));
         let flip_flop = TFlipFlop::new(graph, &format!("{}.flip_flop", name));
 
-        let input = !(&d & &load & clear.clone());
-        let set = !&input;
+        let use_input = !(&input & &load & clear.clone());
+        let set = !&use_input;
 
-        let load_ff = !(&input & &load);
+        let load_ff = !(&use_input & &load);
         let reset_ff = !&clear | !load_ff;
 
         graph.connect(&set, flip_flop.set());
         graph.connect(&reset_ff, flip_flop.reset());
 
         Self {
-            d,
+            input,
             clear,
             load,
             flip_flop,
@@ -114,8 +114,8 @@ pub struct FullAdder {
 }
 
 impl FullAdder {
-    pub fn d(&self) -> &Pin {
-        &self.half_adder.d()
+    pub fn input(&self) -> &Pin {
+        &self.half_adder.input()
     }
     pub fn clear(&self) -> &Pin {
         self.half_adder.clear()
@@ -170,35 +170,35 @@ pub struct Ic74193 {
 }
 
 impl Ic74193 {
-    pub fn d(&self) -> [&Pin; 4] {
-        [self.d1(), self.d2(), self.d3(), self.d4()]
+    pub fn input(&self) -> [&Pin; 4] {
+        [self.in1(), self.in2(), self.in3(), self.in4()]
     }
-    pub fn d1(&self) -> &Pin {
-        self.adder1.d()
+    pub fn in1(&self) -> &Pin {
+        self.adder1.input()
     }
-    pub fn d2(&self) -> &Pin {
-        self.adder2.d()
+    pub fn in2(&self) -> &Pin {
+        self.adder2.input()
     }
-    pub fn d3(&self) -> &Pin {
-        self.adder3.d()
+    pub fn in3(&self) -> &Pin {
+        self.adder3.input()
     }
-    pub fn d4(&self) -> &Pin {
-        self.adder4.d()
+    pub fn in4(&self) -> &Pin {
+        self.adder4.input()
     }
 
-    pub fn q(&self) -> [&Pin; 4] {
-        [self.d1(), self.d2(), self.d3(), self.d4()]
+    pub fn output(&self) -> [&Pin; 4] {
+        [self.out1(), self.out2(), self.out3(), self.out4()]
     }
-    pub fn q1(&self) -> &Pin {
+    pub fn out1(&self) -> &Pin {
         self.adder1.output()
     }
-    pub fn q2(&self) -> &Pin {
+    pub fn out2(&self) -> &Pin {
         self.adder2.output()
     }
-    pub fn q3(&self) -> &Pin {
+    pub fn out3(&self) -> &Pin {
         self.adder3.output()
     }
-    pub fn q4(&self) -> &Pin {
+    pub fn out4(&self) -> &Pin {
         self.adder4.output()
     }
 
@@ -214,7 +214,13 @@ impl Ic74193 {
         let adder4 = FullAdder::new(graph, &make_name("adder4"));
 
         let carry = nand_nary(graph, &make_name("carry"), 5);
-        carry.connect_inputs(&[up_inv.output(), adder1.output(), adder2.output(), adder3.output(), adder4.output()]);
+        carry.connect_inputs(&[
+            up_inv.output(),
+            adder1.output(),
+            adder2.output(),
+            adder3.output(),
+            adder4.output(),
+        ]);
 
         let borrow = nand_nary(graph, &make_name("borrow"), 5);
         borrow.connect_inputs(&[
@@ -285,14 +291,14 @@ pub struct Counter8Bit {
 impl Counter8Bit {
     pub fn input(&self) -> [&Pin; 8] {
         [
-            self.counter1.d1(),
-            self.counter1.d2(),
-            self.counter1.d3(),
-            self.counter1.d4(),
-            self.counter2.d1(),
-            self.counter2.d2(),
-            self.counter2.d3(),
-            self.counter2.d4(),
+            self.counter1.in1(),
+            self.counter1.in2(),
+            self.counter1.in3(),
+            self.counter1.in4(),
+            self.counter2.in1(),
+            self.counter2.in2(),
+            self.counter2.in3(),
+            self.counter2.in4(),
         ]
     }
 
@@ -314,14 +320,14 @@ impl Counter8Bit {
 
     pub fn output(&self) -> [&Pin; 8] {
         [
-            self.counter1.q1(),
-            self.counter1.q2(),
-            self.counter1.q3(),
-            self.counter1.q4(),
-            self.counter2.q1(),
-            self.counter2.q2(),
-            self.counter2.q3(),
-            self.counter2.q4(),
+            self.counter1.out1(),
+            self.counter1.out2(),
+            self.counter1.out3(),
+            self.counter1.out4(),
+            self.counter2.out1(),
+            self.counter2.out2(),
+            self.counter2.out3(),
+            self.counter2.out4(),
         ]
     }
 
@@ -571,10 +577,10 @@ mod test_counter {
         };
 
         connect_many(&[
-            (&d[0], counter.d1()),
-            (&d[1], counter.d2()),
-            (&d[2], counter.d3()),
-            (&d[3], counter.d4()),
+            (&d[0], counter.in1()),
+            (&d[1], counter.in2()),
+            (&d[2], counter.in3()),
+            (&d[3], counter.in4()),
         ]);
 
         graph.run();
@@ -584,10 +590,10 @@ mod test_counter {
         assert_eq!(
             &[Signal::Low; 4],
             &[
-                counter.q1().sig(),
-                counter.q2().sig(),
-                counter.q3().sig(),
-                counter.q4().sig(),
+                counter.out1().sig(),
+                counter.out2().sig(),
+                counter.out3().sig(),
+                counter.out4().sig(),
             ]
         );
 
@@ -596,10 +602,10 @@ mod test_counter {
         assert_eq!(
             &[Signal::High, Signal::Low, Signal::Low, Signal::High,],
             &[
-                counter.q1().sig(),
-                counter.q2().sig(),
-                counter.q3().sig(),
-                counter.q4().sig(),
+                counter.out1().sig(),
+                counter.out2().sig(),
+                counter.out3().sig(),
+                counter.out4().sig(),
             ]
         );
         load_inv.set_output(Signal::High);
@@ -608,10 +614,10 @@ mod test_counter {
         assert_eq!(
             &[Signal::High, Signal::Low, Signal::Low, Signal::High,],
             &[
-                counter.q1().sig(),
-                counter.q2().sig(),
-                counter.q3().sig(),
-                counter.q4().sig(),
+                counter.out1().sig(),
+                counter.out2().sig(),
+                counter.out3().sig(),
+                counter.out4().sig(),
             ]
         );
     }
@@ -641,14 +647,14 @@ mod test_counter {
         assert_eq!(
             &[Signal::Low; 8],
             &[
-                counter.q1().sig(),
-                counter.q2().sig(),
-                counter.q3().sig(),
-                counter.q4().sig(),
-                counter2.q1().sig(),
-                counter2.q2().sig(),
-                counter2.q3().sig(),
-                counter2.q4().sig(),
+                counter.out1().sig(),
+                counter.out2().sig(),
+                counter.out3().sig(),
+                counter.out4().sig(),
+                counter2.out1().sig(),
+                counter2.out2().sig(),
+                counter2.out3().sig(),
+                counter2.out4().sig(),
             ]
         );
 
@@ -673,14 +679,14 @@ mod test_counter {
                 Signal::Low,
             ],
             &[
-                counter.q1().sig(),
-                counter.q2().sig(),
-                counter.q3().sig(),
-                counter.q4().sig(),
-                counter2.q1().sig(),
-                counter2.q2().sig(),
-                counter2.q3().sig(),
-                counter2.q4().sig(),
+                counter.out1().sig(),
+                counter.out2().sig(),
+                counter.out3().sig(),
+                counter.out4().sig(),
+                counter2.out1().sig(),
+                counter2.out2().sig(),
+                counter2.out3().sig(),
+                counter2.out4().sig(),
             ],
         );
     }
