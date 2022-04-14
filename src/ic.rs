@@ -3,23 +3,23 @@ use derive_getters::Getters;
 
 #[derive(Debug, Getters)]
 pub struct TFlipFlop {
-    t: Pin,
-    s: Pin,
-    r: Pin,
-    q: Pin,
-    q_inv: Pin,
+    toggle: Pin,
+    set: Pin,
+    reset: Pin,
+    output: Pin,
+    out_inv: Pin,
 }
 
 impl TFlipFlop {
     // external
-    const T: usize = 0;
-    const S: usize = 1;
-    const R: usize = 2;
-    const Q: usize = 3;
-    const Q_INV: usize = 4;
+    const TOGGLE: usize = 0;
+    const SET: usize = 1;
+    const RESET: usize = 2;
+    const OUTPUT: usize = 3;
+    const OUT_INV: usize = 4;
 
-    // internal
-    const T_PREV: usize = 5;
+    // internal for edge detection
+    const TOGGLE_PREV: usize = 5;
 
     pub fn new(graph: &mut Graph, name: &str) -> Self {
         let pins = graph.new_part(
@@ -33,26 +33,26 @@ impl TFlipFlop {
                 PinState::INPUT,
             ],
             |pins| {
-                let new_q = if pins[Self::R].is_high() {
+                let new_q = if pins[Self::RESET].is_high() {
                     Signal::Low
-                } else if pins[Self::S].is_high() {
+                } else if pins[Self::SET].is_high() {
                     Signal::High
-                } else if pins[Self::T].is_high() && pins[Self::T_PREV].is_lowish() {
-                    pins[Self::Q_INV].sig()
+                } else if pins[Self::TOGGLE].is_high() && pins[Self::TOGGLE_PREV].is_lowish() {
+                    pins[Self::OUT_INV].sig()
                 } else {
-                    pins[Self::Q].sig()
+                    pins[Self::OUTPUT].sig()
                 };
-                pins[Self::Q] = PinState::Output(new_q);
-                pins[Self::Q_INV] = PinState::Output(!new_q);
-                pins[Self::T_PREV] = pins[Self::T];
+                pins[Self::OUTPUT] = PinState::Output(new_q);
+                pins[Self::OUT_INV] = PinState::Output(!new_q);
+                pins[Self::TOGGLE_PREV] = pins[Self::TOGGLE];
             },
         );
         Self {
-            t: pins[Self::T].clone(),
-            s: pins[Self::S].clone(),
-            r: pins[Self::R].clone(),
-            q: pins[Self::Q].clone(),
-            q_inv: pins[Self::Q_INV].clone(),
+            toggle: pins[Self::TOGGLE].clone(),
+            set: pins[Self::SET].clone(),
+            reset: pins[Self::RESET].clone(),
+            output: pins[Self::OUTPUT].clone(),
+            out_inv: pins[Self::OUT_INV].clone(),
         }
     }
 }
@@ -68,14 +68,14 @@ pub struct HalfAdder {
 }
 
 impl HalfAdder {
-    pub fn t(&self) -> &Pin {
-        self.flip_flop.t()
+    pub fn toggle(&self) -> &Pin {
+        self.flip_flop.toggle()
     }
-    pub fn q(&self) -> &Pin {
-        self.flip_flop.q()
+    pub fn output(&self) -> &Pin {
+        self.flip_flop.output()
     }
-    pub fn q_inv(&self) -> &Pin {
-        self.flip_flop.q_inv()
+    pub fn out_inv(&self) -> &Pin {
+        self.flip_flop.out_inv()
     }
 
     pub fn new(graph: &mut Graph, name: &str) -> Self {
@@ -90,8 +90,8 @@ impl HalfAdder {
         let load_ff = !(&input & &load);
         let reset_ff = !&clear | !load_ff;
 
-        graph.connect(&set, flip_flop.s());
-        graph.connect(&reset_ff, flip_flop.r());
+        graph.connect(&set, flip_flop.set());
+        graph.connect(&reset_ff, flip_flop.reset());
 
         Self {
             d,
@@ -123,11 +123,11 @@ impl FullAdder {
     pub fn load(&self) -> &Pin {
         self.half_adder.load()
     }
-    pub fn q(&self) -> &Pin {
-        self.half_adder.q()
+    pub fn output(&self) -> &Pin {
+        self.half_adder.output()
     }
-    pub fn q_inv(&self) -> &Pin {
-        self.half_adder.q_inv()
+    pub fn out_inv(&self) -> &Pin {
+        self.half_adder.out_inv()
     }
 
     pub fn new(graph: &mut Graph, name: &str) -> Self {
@@ -141,7 +141,7 @@ impl FullAdder {
 
         let toggle = !(adder.up() & adder.up_cond() | adder.down() & adder.down_cond());
 
-        graph.connect(&toggle, adder.half_adder.t());
+        graph.connect(&toggle, adder.half_adder.toggle());
 
         adder
     }
@@ -190,16 +190,16 @@ impl Ic74193 {
         [self.d1(), self.d2(), self.d3(), self.d4()]
     }
     pub fn q1(&self) -> &Pin {
-        self.adder1.q()
+        self.adder1.output()
     }
     pub fn q2(&self) -> &Pin {
-        self.adder2.q()
+        self.adder2.output()
     }
     pub fn q3(&self) -> &Pin {
-        self.adder3.q()
+        self.adder3.output()
     }
     pub fn q4(&self) -> &Pin {
-        self.adder4.q()
+        self.adder4.output()
     }
 
     pub fn new(graph: &mut Graph, name: &str) -> Self {
@@ -214,33 +214,33 @@ impl Ic74193 {
         let adder4 = FullAdder::new(graph, &make_name("adder4"));
 
         let carry = nand_nary(graph, &make_name("carry"), 5);
-        carry.connect_inputs(&[up_inv.output(), adder1.q(), adder2.q(), adder3.q(), adder4.q()]);
+        carry.connect_inputs(&[up_inv.output(), adder1.output(), adder2.output(), adder3.output(), adder4.output()]);
 
         let borrow = nand_nary(graph, &make_name("borrow"), 5);
         borrow.connect_inputs(&[
             down_inv.output(),
-            adder1.q_inv(),
-            adder2.q_inv(),
-            adder3.q_inv(),
-            adder4.q_inv(),
+            adder1.out_inv(),
+            adder2.out_inv(),
+            adder3.out_inv(),
+            adder4.out_inv(),
         ]);
 
         let toggle1 = !(up_inv.output() | down_inv.output());
 
-        toggle1.connect(adder1.t());
+        toggle1.connect(adder1.toggle());
 
-        let up_cond2 = adder1.q();
-        let down_cond2 = adder1.q_inv();
+        let up_cond2 = adder1.output();
+        let down_cond2 = adder1.out_inv();
         graph.connect(&up_cond2, adder2.up_cond());
         graph.connect(&down_cond2, adder2.down_cond());
 
-        let up_cond3 = up_cond2 & adder2.q();
-        let down_cond3 = down_cond2 & adder2.q_inv();
+        let up_cond3 = up_cond2 & adder2.output();
+        let down_cond3 = down_cond2 & adder2.out_inv();
         graph.connect(&up_cond3, adder3.up_cond());
         graph.connect(&down_cond3, adder3.down_cond());
 
-        let up_cond4 = &up_cond3 & adder3.q();
-        let down_cond4 = &down_cond3 & adder3.q_inv();
+        let up_cond4 = &up_cond3 & adder3.output();
+        let down_cond4 = &down_cond3 & adder3.out_inv();
         graph.connect(&up_cond4, adder4.up_cond());
         graph.connect(&down_cond4, adder4.down_cond());
 
