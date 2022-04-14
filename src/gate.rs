@@ -312,8 +312,8 @@ impl TristateBuffer {
 
         Self(graph.new_part(name, &states, move |pins| {
             let (outs, rest) = pins.split_at_mut(width);
-            let (ins, _) = rest.split_at_mut(width);
-            if ins.last().unwrap().is_high() {
+            let (ins, en) = rest.split_at_mut(width);
+            if en[0].is_high() {
                 for (q, a) in zip(outs, ins) {
                     *q = match a {
                         PinState::HiZ => PinState::HiZ,
