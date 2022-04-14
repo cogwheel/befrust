@@ -2,6 +2,7 @@ pub mod gate;
 pub mod graph;
 pub mod ic;
 
+use std::fmt::{Debug, Formatter};
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
 pub use gate::*;
@@ -38,6 +39,105 @@ impl Signal {
 
     fn is_high(&self) -> bool {
         *self == Signal::High
+    }
+}
+
+pub trait ToSignal {
+    fn sig(&self) -> Signal;
+}
+
+impl ToSignal for Signal {
+    fn sig(&self) -> Signal {
+        *self
+    }
+}
+
+// TODO: surely there's a magic way to do this
+impl ToSignal for &Signal {
+    fn sig(&self) -> Signal {
+        **self
+    }
+}
+
+#[derive(Copy, Clone, Default, PartialEq, PartialOrd)]
+pub struct BusValue {
+    pub val: usize,
+    pub error: usize,
+}
+
+impl BusValue {
+    pub fn new_val(val: usize) -> Self {
+        Self { val, error: 0 }
+    }
+
+    pub fn new_error(error: usize) -> Self {
+        Self { error, val: 0 }
+    }
+
+    pub fn unwrap(&self) -> usize {
+        assert_eq!(
+            self.error, 0,
+            "Attempting to unwrap BusValue with error_mask: {:#x}",
+            self.error
+        );
+
+        self.val
+    }
+
+    pub fn sig(&self, i: usize) -> Signal {
+        if (self.error >> i) & 1 == 1 {
+            Signal::Error
+        } else if (self.val >> i ) & 1 == 1 {
+            Signal::High
+        } else {
+            Signal::Low
+        }
+        // TODO: figure out how to have Signal::Off on buses
+    }
+}
+
+impl Debug for BusValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BusValue")
+            .field("val", &format_args!("{:#x}", self.val))
+            .field("error", &format_args!("{:#x}", self.error))
+            .finish()
+    }
+}
+
+pub trait ToValue {
+    fn val(self) -> BusValue;
+}
+
+impl ToValue for Signal {
+    fn val(self) -> BusValue {
+        match self {
+            Signal::Error => BusValue::new_error(1),
+            Signal::High => BusValue::new_val(1),
+            _ => BusValue::new_val(0),
+        }
+    }
+}
+
+impl<T> ToValue for T
+where
+    T: Iterator,
+    T::Item: ToSignal,
+{
+    fn val(self) -> BusValue {
+        let mut bus_val = BusValue::default();
+        for (i, sig) in self.map(|x| x.sig()).enumerate() {
+            assert!(
+                (i as u32) < usize::BITS,
+                "Bus has more than usize::BITS ({}) bits",
+                usize::BITS
+            );
+            let sig_val = sig.val();
+            bus_val.val += sig_val.val << i;
+            bus_val.error += sig_val.error << i;
+        }
+
+        bus_val
     }
 }
 
@@ -173,24 +273,34 @@ impl PinState {
     /// Shorthand for a default output. Error until the Part's updater runs.
     pub const OUTPUT: PinState = PinState::Output(Signal::Error);
 
-    /// Get the logical signal for the PinState
-    ///
-    /// TODO: should this be q()?
-    pub fn sig(self) -> Signal {
-        match self {
-            PinState::HiZ => Signal::Off,
-            PinState::Input(signal) | PinState::Output(signal) => signal,
-        }
-    }
-
     /// Helper for treating Off the same as Low
-    pub fn is_lowish(self) -> bool {
+    pub fn is_lowish(&self) -> bool {
         [Signal::Low, Signal::Off].contains(&self.sig())
     }
 
     /// TODO: add others?
-    pub fn is_high(self) -> bool {
+    pub fn is_high(&self) -> bool {
         self.sig() == Signal::High
+    }
+
+    pub fn val(&self) -> BusValue {
+        self.sig().val()
+    }
+}
+
+impl ToSignal for PinState {
+    /// Get the logical signal for the PinState
+    fn sig(&self) -> Signal {
+        match self {
+            PinState::HiZ => Signal::Off,
+            PinState::Input(signal) | PinState::Output(signal) => *signal,
+        }
+    }
+}
+
+impl ToSignal for &PinState {
+    fn sig(&self) -> Signal {
+        (*self).sig()
     }
 }
 
@@ -236,6 +346,30 @@ impl BitXor for PinState {
     fn bitxor(self, rhs: Self) -> Signal {
         self.sig() ^ rhs.sig()
     }
+}
+
+#[cfg(test)]
+#[test]
+pub fn test_bus_val() {
+    let mut sig_bus = [Signal::High; 5];
+
+    assert_eq!(sig_bus.iter().val(), BusValue::new_val(31));
+
+    sig_bus[2] = Signal::Error;
+
+    assert_eq!(sig_bus.iter().val(), BusValue{ val: 27, error: 4 });
+
+    let mut state_bus = [
+        PinState::HiZ,
+        PinState::Output(Signal::High),
+        PinState::Output(Signal::Off),
+    ];
+
+    assert_eq!(state_bus.iter().val(), BusValue::new_val(2));
+
+    state_bus[0] = PinState::Output(Signal::Error);
+
+    assert_eq!(state_bus.iter().val(), BusValue{ val: 2, error: 1 });
 }
 
 #[cfg(test)]

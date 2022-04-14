@@ -4,7 +4,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
-use std::ops::Range;
+use std::ops::{Add, Range};
 use std::rc::Rc;
 
 pub type PinId = usize;
@@ -31,11 +31,6 @@ impl Pin {
     }
 
     #[inline(always)]
-    pub fn sig(&self) -> Signal {
-        self.graph().get_signal(self)
-    }
-
-    #[inline(always)]
     pub fn state(&self) -> PinState {
         self.graph().get_state(self)
     }
@@ -59,6 +54,25 @@ impl Pin {
     #[inline(always)]
     pub fn flash_output(&mut self) {
         self.graph().flash_output(self);
+    }
+}
+
+impl ToSignal for Pin {
+    fn sig(&self) -> Signal {
+        self.graph.clone().get_signal(self)
+    }
+}
+
+impl ToSignal for &Pin {
+    fn sig(&self) -> Signal {
+        (*self).sig()
+    }
+}
+
+// TODO: wat
+impl ToSignal for &&Pin {
+    fn sig(&self) -> Signal {
+        (**self).sig()
     }
 }
 
@@ -89,8 +103,8 @@ impl Node {
 
 /// A set of pins with an update function
 ///
-/// The update function is called each tick with the "before" and "after" states for the pins
-type Part = Box<dyn FnMut(&[PinState], &mut [PinState])>;
+/// The update function is called each tick with the latest states of the pins
+type Part = Box<dyn FnMut(&mut [PinState])>;
 
 /// The interface to the befrust compute graph
 ///
@@ -103,9 +117,7 @@ pub struct Graph(Rc<RefCell<GraphImpl>>);
 struct GraphImpl {
     /// Current state of all pins in the graph
     pub pin_states: Vec<PinState>,
-
-    /// Output states for part updates
-    pub back_buffer: Vec<PinState>,
+    pub pin_names: Vec<String>,
 
     /// Set of Nodes in the graph. Implemented as map for reverse lookup
     ///
@@ -125,7 +137,7 @@ struct GraphImpl {
 }
 
 /// Update and cycle information for a run of the graph
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct RunStats {
     /// Number of ticks to reach steady state
     pub ticks: usize,
@@ -139,10 +151,23 @@ pub struct RunStats {
     pub cycle: usize,
 }
 
+impl Add for RunStats {
+    type Output = RunStats;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        RunStats{
+            ticks: self.ticks + rhs.ticks,
+            updates: self.updates + rhs.updates,
+            cycle: self.cycle + rhs.cycle,
+        }
+    }
+}
+
 impl GraphImpl {
-    fn new_pin(&mut self, state: PinState) -> PinId {
+    fn new_pin(&mut self, state: PinState, name: String) -> PinId {
         let id = self.pin_states.len();
         self.pin_states.push(state);
+        self.pin_names.push(name);
 
         let node_id = self.next_node;
         self.next_node += 1;
@@ -151,6 +176,7 @@ impl GraphImpl {
 
         self.pin_nodes.push(node_id);
 
+        assert_eq!(self.pin_states.len(), self.pin_names.len());
         assert_eq!(self.pin_states.len(), self.pin_nodes.len());
 
         id
@@ -176,29 +202,32 @@ impl GraphImpl {
     }
 
     pub fn update_nodes(&mut self) -> usize {
+        // TODO: make a debug/trace mode
+        #![allow(unused_assignments, unused_variables)]
         let mut update_count = 0;
-        for node in self.nodes.values_mut() {
-            let mut new_signal = Signal::Off;
-            let mut had_output = false;
+        for (node_id, node) in self.nodes.iter_mut() {
+            let mut new_signal = node.signal;
+            let mut out_count = 0;
+            let mut out_id = usize::MAX;
             for pin in node.pin_ids.iter() {
                 match self.pin_states[*pin] {
                     PinState::HiZ | PinState::Input(_) => continue,
                     PinState::Output(signal) => {
-                        if had_output {
+                        if out_count > 0 {
                             new_signal = Signal::Error;
-                            break;
+                            out_count += 1;
                         } else {
-                            had_output = true;
+                            out_count += 1;
+                            out_id = *pin;
                             new_signal = signal;
-                            if signal == Signal::Error {
-                                break;
-                            }
                         }
                     }
                 }
             }
 
             if new_signal != node.signal {
+                //println!("Update node {} from {:?} to {:?} from pin:", node_id, node.signal, new_signal);
+                //println!("    [{}]:{}", out_id, self.pin_names[out_id]);
                 update_count += 1;
                 node.signal = new_signal;
                 for pin_id in node.pin_ids.iter() {
@@ -214,20 +243,39 @@ impl GraphImpl {
     }
 
     pub fn update_parts(&mut self) {
-        self.back_buffer.clone_from(&self.pin_states);
         for (part, pin_range) in self.parts.iter_mut() {
             let start = pin_range.start;
             let end = pin_range.end;
             part(
-                &self.pin_states[start..end],
-                &mut self.back_buffer[start..end],
+                &mut self.pin_states[start..end],
             );
         }
-        std::mem::swap(&mut self.pin_states, &mut self.back_buffer);
+    }
+
+    pub fn print_nodes(&self) {
+        for (node_id, node) in self.nodes.iter() {
+            println!("node[{}]: {{\n", node_id);
+            for pin_id in &node.pin_ids {
+                println!("    [{}]:{}", pin_id, self.pin_names[*pin_id]);
+            }
+            println!("}}");
+        }
+    }
+
+    pub fn print_orphans(&self) {
+        for (node_id, node) in &self.nodes {
+            if node.pin_ids.len() < 2 {
+                let pin_id = *node.pin_ids.iter().next().unwrap();
+                let name = &self.pin_names[pin_id];
+                println!("Node {} has orphaned pin: {:?} {}", node_id, pin_id, name);
+            }
+        }
     }
 }
 
 impl Graph {
+    // TODO: use IntoIter for sequence interfaces; impl IntoIter for &[&Pin]
+
     pub fn new() -> Self {
         Self(Rc::new(RefCell::new(GraphImpl::default())))
     }
@@ -238,7 +286,7 @@ impl Graph {
 
     pub fn new_pin(&mut self, name: String, state: PinState) -> Pin {
         Pin {
-            id: self.g().new_pin(state),
+            id: self.g().new_pin(state, name.clone()),
             name,
             graph: self.clone(),
         }
@@ -285,7 +333,7 @@ impl Graph {
     /// TODO: take (name, state) pairs
     pub fn new_part<F>(&mut self, name: &str, new_states: &[PinState], updater: F) -> Vec<Pin>
     where
-        F: 'static + FnMut(&[PinState], &mut [PinState]),
+        F: 'static + FnMut(&mut [PinState]),
     {
         let start = self.g().pin_states.len();
         let end = start + new_states.len();
@@ -356,17 +404,34 @@ impl Graph {
         self.g().pin_states[pin.id] = PinState::Output(signal);
     }
 
-    /// Flips the state of the given output pin for one tick
-    pub fn flash_output(&mut self, pin: &mut Pin) -> usize {
+    pub fn flip_output(&mut self, pin: &mut Pin) {
         let state = self.g().pin_states[pin.id];
         assert!(matches!(state, PinState::Output(_)));
+        self.g().pin_states[pin.id] = PinState::Output(!state);
+    }
 
-        let signal = state.sig();
-        self.g().pin_states[pin.id] = PinState::Output(!signal);
+    /// Flips the state of the given output pin for one tick
+    pub fn flash_output(&mut self, pin: &mut Pin) -> usize {
+        self.flip_output(pin);
         let updates = self.tick();
-        self.g().pin_states[pin.id] = PinState::Output(signal);
+        self.flip_output(pin);
 
         updates
+    }
+
+    pub fn pulse_output(&mut self, pin: &mut Pin) -> RunStats {
+        self.flip_output(pin);
+        let stats = self.run();
+        self.flip_output(pin);
+        stats + self.run()
+    }
+
+    pub fn print_orphans(&self) {
+        self.g().print_orphans()
+    }
+
+    pub fn print_nodes(&self) {
+        self.g().print_nodes()
     }
 }
 
@@ -384,8 +449,8 @@ mod test_graph {
         let pins = graph.new_part(
             "not_gate",
             &[PinState::INPUT, PinState::OUTPUT],
-            |input, output| {
-                output[1] = PinState::Output(!(input[0]));
+            |pins| {
+                pins[1] = PinState::Output(!(pins[0]));
             },
         );
 

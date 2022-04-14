@@ -1,3 +1,4 @@
+use std::iter::zip;
 use crate::*;
 
 use derive_getters::Getters;
@@ -14,7 +15,7 @@ impl UnaryGate {
 
     pub fn new<F>(graph: &mut Graph, name: &str, updater: F) -> Self
     where
-        F: 'static + FnMut(&[PinState], &mut [PinState]),
+        F: 'static + FnMut(&mut [PinState]),
     {
         let pins = graph.new_part(name, &[PinState::INPUT, PinState::OUTPUT], updater);
         Self {
@@ -25,14 +26,14 @@ impl UnaryGate {
 }
 
 pub fn not_gate(graph: &mut Graph, name: &str) -> UnaryGate {
-    UnaryGate::new(graph, name, |before, after| {
-        after[UnaryGate::Q] = PinState::Output(!before[UnaryGate::A])
+    UnaryGate::new(graph, name, |pins| {
+        pins[UnaryGate::Q] = PinState::Output(!pins[UnaryGate::A])
     })
 }
 
 pub fn buffer(graph: &mut Graph, name: &str) -> UnaryGate {
-    UnaryGate::new(graph, name, |before, after| {
-        after[UnaryGate::Q] = before[UnaryGate::A]
+    UnaryGate::new(graph, name, |pins| {
+        pins[UnaryGate::Q] = PinState::Output(pins[UnaryGate::A].sig())
     })
 }
 
@@ -50,7 +51,7 @@ impl BinaryGate {
 
     pub fn new<F>(graph: &mut Graph, name: &str, updater: F) -> Self
     where
-        F: 'static + FnMut(&[PinState], &mut [PinState]),
+        F: 'static + FnMut(&mut [PinState]),
     {
         let pins = graph.new_part(
             name,
@@ -66,20 +67,32 @@ impl BinaryGate {
 }
 
 pub fn and_gate(graph: &mut Graph, name: &str) -> BinaryGate {
-    BinaryGate::new(graph, name, |before, after| {
-        after[BinaryGate::Q] = PinState::Output(before[BinaryGate::A] & before[BinaryGate::B]);
+    BinaryGate::new(graph, name, |pins| {
+        pins[BinaryGate::Q] = PinState::Output(pins[BinaryGate::A] & pins[BinaryGate::B]);
+    })
+}
+
+pub fn nand_gate(graph: &mut Graph, name: &str) -> BinaryGate {
+    BinaryGate::new(graph, name, |pins| {
+        pins[BinaryGate::Q] = PinState::Output(!(pins[BinaryGate::A] & pins[BinaryGate::B]));
     })
 }
 
 pub fn or_gate(graph: &mut Graph, name: &str) -> BinaryGate {
-    BinaryGate::new(graph, name, |before, after| {
-        after[BinaryGate::Q] = PinState::Output(before[BinaryGate::A] | before[BinaryGate::B]);
+    BinaryGate::new(graph, name, |pins| {
+        pins[BinaryGate::Q] = PinState::Output(pins[BinaryGate::A] | pins[BinaryGate::B]);
+    })
+}
+
+pub fn nor_gate(graph: &mut Graph, name: &str) -> BinaryGate {
+    BinaryGate::new(graph, name, |pins| {
+        pins[BinaryGate::Q] = PinState::Output(!(pins[BinaryGate::A] | pins[BinaryGate::B]));
     })
 }
 
 pub fn xor_gate(graph: &mut Graph, name: &str) -> BinaryGate {
-    BinaryGate::new(graph, name, |before, after| {
-        after[BinaryGate::Q] = PinState::Output(before[BinaryGate::A] ^ before[BinaryGate::B]);
+    BinaryGate::new(graph, name, |pins| {
+        pins[BinaryGate::Q] = PinState::Output(pins[BinaryGate::A] ^ pins[BinaryGate::B]);
     })
 }
 
@@ -169,22 +182,25 @@ impl BitXor for Pin {
 pub struct NaryGate(Vec<Pin>);
 
 impl NaryGate {
-    pub fn a(&self) -> &[Pin] {
-        &self.0[1..]
+    pub fn input(&self) -> &[Pin] {
+        &self.0[Self::INPUTS..]
     }
     pub fn n(&self, n: usize) -> &Pin {
-        &self.0[n + 1]
+        &self.0[Self::INPUTS + n]
     }
     pub fn q(&self) -> &Pin {
-        &self.0[0]
+        &self.0[Self::OUTPUT]
     }
+
+    pub const INPUTS: usize = 1;
+    pub const OUTPUT: usize = 0;
 
     pub fn new<F>(graph: &mut Graph, name: &str, inputs: usize, updater: F) -> Self
     where
-        F: 'static + FnMut(&[PinState], &mut [PinState]),
+        F: 'static + FnMut(&mut [PinState]),
     {
-        let mut states = vec![PinState::INPUT; inputs + 1];
-        states[0] = PinState::OUTPUT;
+        let mut states = vec![PinState::INPUT; Self::INPUTS + inputs];
+        states[Self::OUTPUT] = PinState::OUTPUT;
         Self(graph.new_part(name, &states, updater))
     }
 
@@ -196,25 +212,123 @@ impl NaryGate {
 }
 
 pub fn and_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
-    NaryGate::new(graph, name, inputs, |before, after| {
-        let mut result = before[1].sig();
-        for state in &before[2..] {
+    NaryGate::new(graph, name, inputs, |pins| {
+        let mut result = pins[NaryGate::INPUTS].sig();
+        // No shortcut in case of Errors
+        for state in &pins[NaryGate::INPUTS + 1..] {
             result &= state.sig();
         }
 
-        after[0] = PinState::Output(result);
+        pins[0] = PinState::Output(result);
+    })
+}
+
+pub fn or_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
+    NaryGate::new(graph, name, inputs, |pins| {
+        let mut result = pins[NaryGate::INPUTS].sig();
+        for state in &pins[NaryGate::INPUTS + 1..] {
+            result |= state.sig();
+        }
+
+        pins[0] = PinState::Output(result);
     })
 }
 
 pub fn nand_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
-    NaryGate::new(graph, name, inputs, |before, after| {
-        let mut result = before[1].sig();
-        for state in &before[2..] {
+    NaryGate::new(graph, name, inputs, |pins| {
+        let mut result = pins[NaryGate::INPUTS].sig();
+        for state in &pins[NaryGate::INPUTS + 1..] {
             result &= state.sig();
         }
 
-        after[0] = PinState::Output(!result);
+        pins[0] = PinState::Output(!result);
     })
+}
+
+pub fn nor_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
+    NaryGate::new(graph, name, inputs, |pins| {
+        let mut result = pins[NaryGate::INPUTS].sig();
+        for state in &pins[NaryGate::INPUTS + 1..] {
+            result |= state.sig();
+        }
+
+        pins[0] = PinState::Output(!result);
+    })
+}
+
+// TODO: Unify bus gates and nary gates
+pub struct BusBuffer(Vec<Pin>);
+
+impl BusBuffer {
+    pub fn input(&self) -> &[Pin] {
+        &self.0[self.width()..]
+    }
+
+    pub fn output(&self) -> &[Pin] {
+        &self.0[..self.width()]
+    }
+
+    pub fn width(&self) -> usize {
+        self.0.len() / 2
+    }
+
+    pub fn new(graph: &mut Graph, name: &str, width: usize) -> Self {
+        let mut states = vec![PinState::INPUT; 2 * width];
+        states[0..width].fill(PinState::OUTPUT);
+
+        Self(graph.new_part(name, &states, move |pins| {
+            let (outs, ins) = pins.split_at_mut(width);
+            for (q, a) in zip(outs, ins) {
+                *q = match a {
+                    PinState::HiZ => PinState::HiZ,
+                    PinState::Input(sig) => PinState::Output(*sig),
+                    _ => PinState::Output(Signal::Error),
+                }
+            }
+        }))
+    }
+}
+
+pub struct BusTristate(Vec<Pin>);
+
+impl BusTristate {
+    pub fn input(&self) -> &[Pin] {
+        &self.0[self.width()..2 * self.width()]
+    }
+
+    pub fn output(&self) -> &[Pin] {
+        &self.0[..self.width()]
+    }
+
+    pub fn en(&self) -> &Pin {
+        &self.0.last().unwrap()
+    }
+
+    pub fn width(&self) -> usize {
+        (self.0.len() - 1) / 2
+    }
+
+    pub fn new(graph: &mut Graph, name: &str, width: usize) -> Self {
+        let mut states = vec![PinState::INPUT; 2 * width + 1];
+        // outputs start disconnected
+        states[0..width].fill(PinState::HiZ);
+
+        Self(graph.new_part(name, &states, move |pins| {
+            let (outs, rest) = pins.split_at_mut(width);
+            let (ins, en) = rest.split_at_mut(width);
+            if en[0].is_high() {
+                for (q, a) in zip(outs, ins) {
+                    *q = match a {
+                        PinState::HiZ => PinState::HiZ,
+                        PinState::Input(sig) => PinState::Output(*sig),
+                        _ => PinState::Output(Signal::Error),
+                    }
+                }
+            } else {
+                outs.fill(PinState::HiZ)
+            }
+        }))
+    }
 }
 
 #[cfg(test)]
@@ -263,9 +377,9 @@ mod test_gates {
     fn test_and_gate() {
         let mut graph = Graph::new();
 
-        let high = graph.new_output("a", Signal::High);
-        let low = graph.new_output("a", Signal::Low);
-        let high2 = graph.new_output("a", Signal::High);
+        let high = graph.new_output("high", Signal::High);
+        let low = graph.new_output("low", Signal::Low);
+        let high2 = graph.new_output("high2", Signal::High);
 
         let high_and_low = and_gate(&mut graph, "and1");
         let high_and_high = and_gate(&mut graph, "and2");
@@ -303,6 +417,27 @@ mod test_gates {
     }
 
     #[test]
+    fn test_nand_gate() {
+        let mut graph = Graph::new();
+
+        let high = graph.new_output("high", Signal::High);
+        let low = graph.new_output("low", Signal::Low);
+        let high2 = graph.new_output("high2", Signal::High);
+
+        let high_nand_low = nand_gate(&mut graph, "nand1");
+        let high_nand_high = nand_gate(&mut graph, "nand2");
+
+        graph.connect_all(&[&high, high_nand_low.a(), high_nand_high.a()]);
+        graph.connect(&low, high_nand_low.b());
+        graph.connect(&high2, high_nand_high.b());
+
+        graph.run();
+
+        assert_high!(high_nand_low.q());
+        assert_low!(high_nand_high.q());
+    }
+
+    #[test]
     fn test_nand_nary() {
         let mut graph = Graph::new();
         let a1 = graph.new_output("a1", Signal::High);
@@ -322,6 +457,80 @@ mod test_gates {
         graph.run();
 
         assert_low!(nandy.q());
+    }
+
+    #[test]
+    fn test_bus_buffer() {
+        let mut graph = Graph::new();
+
+        let buffer = BusBuffer::new(&mut graph, "buffer", 5);
+
+        let mut inputs = graph.new_pins("inputs", &[PinState::Output(Signal::Low); 5]);
+        for i in 0..5 {
+            graph.connect(&inputs[i], &buffer.input()[i]);
+        }
+
+        graph.run();
+
+        for i in 0..5 {
+            assert_low!(buffer.output()[i]);
+        }
+
+        inputs[2].set_output(Signal::High);
+        graph.run();
+
+        for i in 0..5 {
+            if i == 2 {
+                assert_high!(buffer.output()[i]);
+            } else {
+                assert_low!(buffer.output()[i]);
+            }
+        }
+    }
+
+    #[test]
+    fn test_bus_tristate() {
+        let mut graph = Graph::new();
+
+        let buffer = BusTristate::new(&mut graph, "buffer", 5);
+
+        let mut inputs = graph.new_pins("inputs", &[PinState::Output(Signal::Low); 5]);
+        for i in 0..5 {
+            graph.connect(&inputs[i], &buffer.input()[i]);
+        }
+
+        let mut enable = graph.new_output("enable", Signal::Low);
+        graph.connect(&enable, buffer.en());
+
+        graph.run();
+
+        for i in 0..5 {
+            assert_eq!(PinState::HiZ, buffer.output()[i].state());
+        }
+
+        enable.set_output(Signal::High);
+        graph.run();
+        for i in 0..5 {
+            assert_low!(buffer.output()[i]);
+        }
+
+
+        inputs[2].set_output(Signal::High);
+        graph.run();
+
+        for i in 0..5 {
+            if i == 2 {
+                assert_high!(buffer.output()[i]);
+            } else {
+                assert_low!(buffer.output()[i]);
+            }
+        }
+
+        enable.set_output(Signal::Low);
+        graph.run();
+        for i in 0..5 {
+            assert_eq!(PinState::HiZ, buffer.output()[i].state());
+        }
     }
 }
 
