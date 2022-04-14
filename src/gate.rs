@@ -1,18 +1,30 @@
 use crate::*;
 use std::iter::zip;
 
-use derive_getters::Getters;
-
-#[derive(Getters)]
+/// Represents a single-input, single-output logic gate
 pub struct UnaryGate {
     input: Pin,
     output: Pin,
 }
 
 impl UnaryGate {
+    /// Input pin
+    pub fn input(&self) -> &Pin {
+        &self.input
+    }
+
+    /// Output pin
+    pub fn output(&self) -> &Pin {
+        &self.output
+    }
+
+    /// Input pin index
     pub const INPUT: usize = 0;
+
+    /// Output pin index
     pub const OUTPUT: usize = 1;
 
+    /// Create a unary gate with the given updater
     pub fn new<F>(graph: &mut Graph, name: &str, updater: F) -> Self
     where
         F: 'static + FnMut(&mut [PinState]),
@@ -25,19 +37,25 @@ impl UnaryGate {
     }
 }
 
+/// Creates a single-bit not gate
+///
+/// After one tick, the output will be the logical not of the input
 pub fn not_gate(graph: &mut Graph, name: &str) -> UnaryGate {
     UnaryGate::new(graph, name, |pins| {
         pins[UnaryGate::OUTPUT] = PinState::Output(!pins[UnaryGate::INPUT])
     })
 }
 
+/// Creates a single-bit buffer
+///
+/// After one tick, the output will be the same as the input
 pub fn buffer(graph: &mut Graph, name: &str) -> UnaryGate {
     UnaryGate::new(graph, name, |pins| {
         pins[UnaryGate::OUTPUT] = PinState::Output(pins[UnaryGate::INPUT].sig())
     })
 }
 
-#[derive(Getters)]
+/// Represents single-bit, two-input logic gate
 pub struct BinaryGate {
     input_a: Pin,
     input_b: Pin,
@@ -45,10 +63,31 @@ pub struct BinaryGate {
 }
 
 impl BinaryGate {
+    /// First input pin
+    pub fn input_a(&self) -> &Pin {
+        &self.input_a
+    }
+
+    /// Second input pin
+    pub fn input_b(&self) -> &Pin {
+        &self.input_b
+    }
+
+    /// Output pin
+    pub fn output(&self) -> &Pin {
+        &self.output
+    }
+
+    /// First input pin index
     pub const INPUT_A: usize = 0;
+
+    /// Second input pin index
     pub const INPUT_B: usize = 1;
+
+    /// Output pin index
     pub const OUTPUT: usize = 2;
 
+    /// Creates a new BinaryGate with the given updater
     pub fn new<F>(graph: &mut Graph, name: &str, updater: F) -> Self
     where
         F: 'static + FnMut(&mut [PinState]),
@@ -66,6 +105,9 @@ impl BinaryGate {
     }
 }
 
+/// Create a binary and gate
+///
+/// After one tick, the output will be the logical and of the inputs
 pub fn and_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     BinaryGate::new(graph, name, |pins| {
         pins[BinaryGate::OUTPUT] =
@@ -73,6 +115,9 @@ pub fn and_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     })
 }
 
+/// Create a binary nand gate
+///
+/// After one tick, the output will be the logical nand of the inputs
 pub fn nand_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     BinaryGate::new(graph, name, |pins| {
         pins[BinaryGate::OUTPUT] =
@@ -80,6 +125,9 @@ pub fn nand_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     })
 }
 
+/// Create a binary or gate
+///
+/// After one tick, the output will be the logical or of the inputs
 pub fn or_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     BinaryGate::new(graph, name, |pins| {
         pins[BinaryGate::OUTPUT] =
@@ -87,6 +135,9 @@ pub fn or_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     })
 }
 
+/// Create a binary nor gate
+///
+/// After one tick, the output will be the logical nor of the inputs
 pub fn nor_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     BinaryGate::new(graph, name, |pins| {
         pins[BinaryGate::OUTPUT] =
@@ -94,6 +145,9 @@ pub fn nor_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     })
 }
 
+/// Create a binary xor gate
+///
+/// After one tick, the output will be the logical xor of the inputs
 pub fn xor_gate(graph: &mut Graph, name: &str) -> BinaryGate {
     BinaryGate::new(graph, name, |pins| {
         pins[BinaryGate::OUTPUT] =
@@ -104,6 +158,7 @@ pub fn xor_gate(graph: &mut Graph, name: &str) -> BinaryGate {
 impl Not for &Pin {
     type Output = Pin;
 
+    /// Creates a not gate using the given pin as its input. Returns the output pin
     fn not(self) -> Self::Output {
         let mut graph = self.graph();
         let name = format!("not({})", self.name());
@@ -116,6 +171,7 @@ impl Not for &Pin {
 impl Not for Pin {
     type Output = Pin;
 
+    /// Creates a not gate using the given pin as its input. Returns the output pin
     fn not(self) -> Self::Output {
         !&self
     }
@@ -124,6 +180,7 @@ impl Not for Pin {
 impl BitAnd for &Pin {
     type Output = Pin;
 
+    /// Creates an and gate using self and rhs as inputs. Returns the output pin
     fn bitand(self, rhs: &Pin) -> Self::Output {
         let mut graph = self.graph();
         let name = format!("and({}, {})", self.name(), rhs.name());
@@ -137,6 +194,7 @@ impl BitAnd for &Pin {
 impl BitAnd for Pin {
     type Output = Pin;
 
+    /// Creates an and gate using self and rhs as inputs. Returns the output pin
     fn bitand(self, rhs: Pin) -> Self::Output {
         &self & &rhs
     }
@@ -145,6 +203,7 @@ impl BitAnd for Pin {
 impl BitOr for &Pin {
     type Output = Pin;
 
+    /// Creates an or gate using self and rhs as inputs. Returns the output pin
     fn bitor(self, rhs: &Pin) -> Self::Output {
         let mut graph = self.graph();
         let name = format!("or({}, {})", self.name(), rhs.name());
@@ -158,6 +217,7 @@ impl BitOr for &Pin {
 impl BitOr for Pin {
     type Output = Pin;
 
+    /// Creates an or gate using self and rhs as inputs. Returns the output pin
     fn bitor(self, rhs: Pin) -> Self::Output {
         &self | &rhs
     }
@@ -166,6 +226,7 @@ impl BitOr for Pin {
 impl BitXor for &Pin {
     type Output = Pin;
 
+    /// Creates an xor gate using self and rhs as inputs. Returns the output pin
     fn bitxor(self, rhs: &Pin) -> Self::Output {
         let mut graph = self.graph();
         let name = format!("xor({}, {})", self.name(), rhs.name());
@@ -179,27 +240,38 @@ impl BitXor for &Pin {
 impl BitXor for Pin {
     type Output = Pin;
 
+    /// Creates an xor gate using self and rhs as inputs. Returns the output pin
     fn bitxor(self, rhs: Pin) -> Self::Output {
         &self ^ &rhs
     }
 }
 
+/// Represents a many-input, single output logic gate
 pub struct NaryGate(Vec<Pin>);
 
 impl NaryGate {
+    /// Gets the input pins for the gate
     pub fn input(&self) -> &[Pin] {
         &self.0[Self::INPUTS..]
     }
+
+    /// Gets the nth input pin for the gate
     pub fn input_n(&self, n: usize) -> &Pin {
         &self.0[Self::INPUTS + n]
     }
+
+    /// Gets the output pin for the gate
     pub fn output(&self) -> &Pin {
         &self.0[Self::OUTPUT]
     }
 
-    pub const INPUTS: usize = 1;
+    /// Output pin index
     pub const OUTPUT: usize = 0;
 
+    /// Input pin starting index
+    pub const INPUTS: usize = 1;
+
+    /// Creates a NaryGate with the given updater
     pub fn new<F>(graph: &mut Graph, name: &str, inputs: usize, updater: F) -> Self
     where
         F: 'static + FnMut(&mut [PinState]),
@@ -209,6 +281,7 @@ impl NaryGate {
         Self(graph.new_part(name, &states, updater))
     }
 
+    /// Connects a sequence of pins to the inputs of the NaryGate
     pub fn connect_inputs(&self, pins: &[&Pin]) {
         for (i, pin) in pins.iter().enumerate() {
             pin.connect(self.input_n(i));
@@ -216,6 +289,9 @@ impl NaryGate {
     }
 }
 
+/// Creates a N-ary and gate
+///
+/// After one tick, the output will be the logical and of all the inputs
 pub fn and_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
     NaryGate::new(graph, name, inputs, |pins| {
         let mut result = pins[NaryGate::INPUTS].sig();
@@ -228,6 +304,9 @@ pub fn and_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
     })
 }
 
+/// Creates a N-ary or gate
+///
+/// After one tick, the output will be the logical or of all the inputs
 pub fn or_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
     NaryGate::new(graph, name, inputs, |pins| {
         let mut result = pins[NaryGate::INPUTS].sig();
@@ -239,6 +318,9 @@ pub fn or_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
     })
 }
 
+/// Creates a N-ary nand gate
+///
+/// After one tick, the output will be the inverse of the logical and of all the inputs
 pub fn nand_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
     NaryGate::new(graph, name, inputs, |pins| {
         let mut result = pins[NaryGate::INPUTS].sig();
@@ -250,6 +332,9 @@ pub fn nand_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
     })
 }
 
+/// Creates a N-ary nor gate
+///
+/// After one tick, the output will be the inverse of the logical or of all the inputs
 pub fn nor_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
     NaryGate::new(graph, name, inputs, |pins| {
         let mut result = pins[NaryGate::INPUTS].sig();
@@ -261,21 +346,28 @@ pub fn nor_nary(graph: &mut Graph, name: &str, inputs: usize) -> NaryGate {
     })
 }
 
+/// Represents a multi-bit buffer
+///
+/// After one tick, the buffer's output signals will match its input signals
 pub struct BusBuffer(Vec<Pin>);
 
 impl BusBuffer {
+    /// Get input pins
     pub fn input(&self) -> &[Pin] {
         &self.0[self.width()..]
     }
 
+    /// Get output pins
     pub fn output(&self) -> &[Pin] {
         &self.0[..self.width()]
     }
 
+    /// Get the bit width of the buffer
     pub fn width(&self) -> usize {
         self.0.len() / 2
     }
 
+    /// Create a new buffer with the given bit width
     pub fn new(graph: &mut Graph, name: &str, width: usize) -> Self {
         let mut states = vec![PinState::INPUT; 2 * width];
         states[0..width].fill(PinState::OUTPUT);
@@ -293,25 +385,34 @@ impl BusBuffer {
     }
 }
 
+/// Represents a multi-bit tristate buffer
+///
+/// After one tick, if `en` is High, the outputs signals will match the input. Otherwise they will
+/// be `HiZ`
 pub struct BusTristate(Vec<Pin>);
 
 impl BusTristate {
+    /// Get the input pins
     pub fn input(&self) -> &[Pin] {
         &self.0[self.width()..2 * self.width()]
     }
 
+    /// Get the output pins
     pub fn output(&self) -> &[Pin] {
         &self.0[..self.width()]
     }
 
+    /// Get the enable pin
     pub fn en(&self) -> &Pin {
         &self.0.last().unwrap()
     }
 
+    /// Get the bit width of the buffer
     pub fn width(&self) -> usize {
         (self.0.len() - 1) / 2
     }
 
+    /// Create a new tristate buffer with the given bit width
     pub fn new(graph: &mut Graph, name: &str, width: usize) -> Self {
         let mut states = vec![PinState::INPUT; 2 * width + 1];
         // outputs start disconnected

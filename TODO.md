@@ -6,26 +6,32 @@ Get what's already here in ship-shape.
 
 * [X] Finish renaming single-letter pins
   * [X] FullAdder
+* [X] rsdoc everything
+  * [X] add doc comments
+  * [X] probably get rid of derive-getters
 * [ ] Comprehensive tests
   * [ ] tests succeeded when ic74193's `output()` returned `dN*` instead of `qN*`
 * [ ] Finish data block
   * [ ] Fix data counter
   * [ ] Add clear clock
-* [ ] rsdoc everything
-  * [ ] update links below
 
 ## Later
 
 Make the bfpu, including any necessary or helpful updates to the compute graph
 
-* [ ] Helper to connect busses (like connect_many)
+* [ ] publish the docs
+  * [ ] maybe need to split this into front/back-end
+  * [ ] update links below
+* [ ] Helper to connect busses (like connect_many, NaryGate::connect_inputs())
 * [ ] Clocks - 3 phase: instruction -> count -> store
 * [ ] Randomize RAM contents - need some re-init mechanism (chonky... might be helped by separating
   graph from execution)
 * [ ] Debugging
+  * [ ] more custom Debug implementations
   * [ ] Trace particular pin states
   * [ ] RunStats should have pins/nodes that are updated instead of just number of updates
   * [ ] Interactive mode (repl)
+* [ ] run_for() - cap number of ticks instead of using hash set
 
 ## Some day
 
@@ -34,14 +40,14 @@ project.
 
 * [ ] Better type safety for parts - named elements instead of vector indexes
 * [ ] Consider renaming PinState (maybe Port?)
+* [ ] Consider removing bitops for PinState
 * [ ] Clean up redundant traits (`for Foo`, `for &Foo`, `for &[Foo]`, `for &[&Foo]`)
   * [ ] Use `IntoIter` instead of slices?
   * [ ] ToSignal
   * [ ] ToValue
 * [ ] inline things (especially method forwards)
+* [ ] look into alternative to `either_are`, `both_are`, `one_is`, etc
 * [ ] only update components if their input nodes changed
-* [ ] narrow: figure out a way to forward getters (and how to contact the author of derive-getters). Broad: maybe have a
-  better interface for components?
 * [ ] Rename `Off` so it's less confusing with `Low`
 * [ ] Expose nodes as a concept - nodes can be treated as an output pin. Connecting a pin to a node merges the pin's
   existing node with the new node. This eliminates the need for an extra buffer to convert a node signal to an output

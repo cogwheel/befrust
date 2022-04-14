@@ -28,6 +28,7 @@ pub enum Signal {
 }
 
 impl Signal {
+    /// Helper to treat Off and Low as the same value
     fn is_lowish(&self) -> bool {
         match self {
             Signal::Low | Signal::Off => true,
@@ -56,21 +57,32 @@ impl ToSignal for &Signal {
     }
 }
 
+/// A collection of signals on a bus
+///
+/// BusValues convert to/from big-endian sequences of `Signals`
 #[derive(Copy, Clone, Default, PartialEq, PartialOrd)]
 pub struct BusValue {
+    /// Numerical representation the bus signals
+    ///
+    /// Bits will be 1 iff the corresponding `Signal` is `High`
     pub val: usize,
+
+    /// Bit mask for signals in an `Error` state
     pub error: usize,
 }
 
 impl BusValue {
+    /// Create a `BusValue` for the given number
     pub fn new_val(val: usize) -> Self {
         Self { val, error: 0 }
     }
 
+    /// Create a `BusValue` with the given error mask
     pub fn new_error(error: usize) -> Self {
         Self { error, val: 0 }
     }
 
+    /// If error mask is empty, returns the value; otherwise panics
     pub fn unwrap(&self) -> usize {
         assert_eq!(
             self.error, 0,
@@ -81,6 +93,7 @@ impl BusValue {
         self.val
     }
 
+    /// Gets the `Signal` for the given bit position
     pub fn sig(&self, i: usize) -> Signal {
         if (self.error >> i) & 1 == 1 {
             Signal::Error
@@ -101,11 +114,16 @@ impl Debug for BusValue {
     }
 }
 
+/// Converts an object to a `BusValue`
+///
+/// Note: I originally tried implementing this as `impl Into<BusValue> for Foo`, but ran into
+/// errors. Might revisit...
 pub trait ToValue {
     fn val(self) -> BusValue;
 }
 
 impl ToValue for Signal {
+    /// Creates a single-bit `BusValue` for a `Signal`
     fn val(self) -> BusValue {
         match self {
             Signal::Error => BusValue::new_error(1),
@@ -120,6 +138,9 @@ where
     T: Iterator,
     T::Item: ToSignal,
 {
+    /// Creates a `BusValue` from a `ToSignal` iterator
+    ///
+    /// The iterator should be in big-endian order (least-significant first)
     fn val(self) -> BusValue {
         let mut bus_val = BusValue::default();
         for (i, sig) in self.map(|x| x.sig()).enumerate() {
@@ -160,19 +181,22 @@ impl Not for Signal {
     }
 }
 
+/// Pattern for matching a value with either element of a pair
 macro_rules! either_are {
     ($val:path) => {
         ($val, _) | (_, $val)
     };
 }
 
+/// Pattern for matching a value with both elements of a pair
 macro_rules! both_are {
     ($val:path) => {
         ($val, $val)
     };
 }
 
-macro_rules! one_is {
+/// Pattern for binding the unmatched element of a pair
+macro_rules! other_is {
     ($val:path, $binding:ident) => {
         ($val, $binding) | ($binding, $val)
     };
@@ -183,7 +207,7 @@ impl BitAnd for Signal {
 
     /// Logical And
     ///
-    /// Single Off treated as Low
+    /// Single Off treated as Low (pending implementation of Pull)
     fn bitand(self, rhs: Self) -> Signal {
         match (self, rhs) {
             either_are!(Signal::Error) => Signal::Error,
@@ -205,11 +229,11 @@ impl BitOr for Signal {
 
     /// Logical Or
     ///
-    /// Single Off treated as Low
+    /// Single Off treated as Low (pending implementation of Pull)
     fn bitor(self, rhs: Self) -> Signal {
         match (self, rhs) {
             either_are!(Signal::Error) => Signal::Error,
-            one_is!(Signal::Off, a) => a,
+            other_is!(Signal::Off, a) => a,
             both_are!(Signal::Low) => Signal::Low,
             _ => Signal::High,
         }
@@ -226,12 +250,12 @@ impl BitXor for Signal {
 
     /// Logical Or
     ///
-    /// Single Off treated as Low
+    /// Single Off treated as Low (pending implementation of Pull)
     fn bitxor(self, rhs: Self) -> Signal {
         match (self, rhs) {
             either_are!(Signal::Error) => Signal::Error,
             both_are!(Signal::Off) => Signal::Off,
-            one_is!(Signal::High, a) if a != Signal::High => Signal::High,
+            other_is!(Signal::High, a) if a != Signal::High => Signal::High,
             _ => Signal::Low,
         }
     }
@@ -255,6 +279,8 @@ pub enum PinState {
     Input(Signal),
 
     /// An output places its signal onto the connected Node
+    ///
+    /// If there is more than one non-Off output in a node, the node's signal will be `Error`
     Output(Signal),
 }
 
@@ -267,15 +293,17 @@ impl PinState {
 
     /// Helper for treating Off the same as Low
     pub fn is_lowish(&self) -> bool {
-        [Signal::Low, Signal::Off].contains(&self.sig())
+        self.sig().is_lowish()
     }
 
     pub fn is_high(&self) -> bool {
-        self.sig() == Signal::High
+        self.sig().is_high()
     }
+}
 
-    pub fn val(&self) -> BusValue {
-        self.sig().val()
+impl Default for PinState {
+    fn default() -> Self {
+        PinState::HiZ
     }
 }
 
@@ -295,9 +323,9 @@ impl ToSignal for &PinState {
     }
 }
 
-impl Default for PinState {
-    fn default() -> Self {
-        PinState::HiZ
+impl ToValue for &PinState {
+    fn val(self) -> BusValue {
+        self.sig().val()
     }
 }
 
