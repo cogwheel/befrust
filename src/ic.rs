@@ -723,7 +723,7 @@ impl IcCY7C199 {
         let data = io_pins.iter().val().unwrap();
         let addr = addr_pins.iter().val().unwrap();
 
-        if ce.is_lowish() || (oe.is_high() && we.is_high()) {
+        if ce.is_lowish() || (oe.is_lowish() && we.is_lowish()) {
             Self::set_io(pins, PinState::HiZ);
         } else if oe.is_high() {
             let data = ram[addr];

@@ -18,8 +18,8 @@ pub struct DataBlock {
 impl Debug for DataBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DataBlock")
-            .field("d", &self.data().iter().val())
-            .field("a", &self.addr().iter().val())
+            .field("data", &self.data().iter().val())
+            .field("addr", &self.addr().iter().val())
             .field("zero", &self.zero().sig())
             .finish()
     }
@@ -243,19 +243,22 @@ fn main() {
     count.set_output(Signal::Low);
     graph.run();
 
-    println!("ptr down 5{:?}", d_block);
+    println!("ptr down 5 {:?}", d_block);
 
     up.set_output(Signal::High);
     graph.pulse_output(&mut count);
     graph.pulse_output(&mut count);
     graph.pulse_output(&mut count);
 
-    println!("ptr up 3{:?}", d_block);
+    println!("ptr up 3 {:?}", d_block);
 
     p_ce.set_output(Signal::Low);
+    graph.run();
+    println!("pe low {:?}", d_block);
+
     d_ce.set_output(Signal::High);
 
     graph.run();
 
-    println!("ptr up 3{:?}", d_block);
+    println!("p_ce/d_ce swap {:?}", d_block);
 }

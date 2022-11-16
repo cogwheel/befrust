@@ -208,8 +208,8 @@ impl BitOr for &Pin {
         let mut graph = self.graph();
         let name = format!("or({}, {})", self.name(), rhs.name());
         let gate = or_gate(&mut graph, &name);
-        graph.connect(&self, gate.input_a());
-        graph.connect(&rhs, gate.input_b());
+        graph.connect(self, gate.input_a());
+        graph.connect(rhs, gate.input_b());
         gate.output().clone()
     }
 }

@@ -213,11 +213,13 @@ impl GraphImpl {
         for (node_id, node) in self.nodes.iter_mut() {
             let mut new_signal = node.signal;
             let mut out_count = 0;
+            //let mut output_pins = vec![];
             let mut out_id = usize::MAX;
             for pin in node.pin_ids.iter() {
                 match self.pin_states[*pin] {
                     PinState::HiZ | PinState::Input(_) => continue,
                     PinState::Output(signal) => {
+                        //output_pins.push(&self.pin_names[*pin]);
                         if out_count > 0 {
                             new_signal = Signal::Error;
                             out_count += 1;
@@ -233,6 +235,9 @@ impl GraphImpl {
             if new_signal != node.signal {
                 //println!("Update node {} from {:?} to {:?} from pin:", node_id, node.signal, new_signal);
                 //println!("    [{}]:{}", out_id, self.pin_names[out_id]);
+                //if out_count > 1 {
+                //    println!("{:?}", output_names);
+                //}
                 update_count += 1;
                 node.signal = new_signal;
                 for pin_id in node.pin_ids.iter() {
