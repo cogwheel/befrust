@@ -22,7 +22,7 @@ Make the bfpu, including any necessary or helpful updates to the compute graph
 * [ ] publish the docs
   * [ ] maybe need to split this into front/back-end
   * [ ] update links below
-* [ ] Helper to connect busses (like connect_many, NaryGate::connect_inputs())
+* [ ] Helper to connect busses (like connect\_many, NaryGate::connect\_inputs())
 * [ ] Clocks - 3 phase: instruction -> count -> store
 * [ ] Randomize RAM contents - need some re-init mechanism (chonky... might be helped by separating
   graph from execution)
@@ -31,7 +31,7 @@ Make the bfpu, including any necessary or helpful updates to the compute graph
   * [ ] Trace particular pin states
   * [ ] RunStats should have pins/nodes that are updated instead of just number of updates
   * [ ] Interactive mode (repl)
-* [ ] run_for() - cap number of ticks instead of using hash set
+* [ ] run\_for() - cap number of ticks instead of using hash set
 
 ## Some day
 
@@ -53,7 +53,7 @@ project.
   existing node with the new node. This eliminates the need for an extra buffer to convert a node signal to an output
 * [ ] Orthogonalize:
   * [`Signal`](src/lib.rs), [`BusValue`](src/lib.rs), and their associated traits
-  * Bus gates (BusBuffer/BusTristate) and nary gates (buffer(), not_gate() etc)
+  * Bus gates (BusBuffer/BusTristate) and nary gates (buffer(), not\_gate() etc)
 * [ ] Bus values should include `Off` state
 * [ ] Separate compute graph construction from execution - creating components, connecting pins, etc. should construct
   an abstract compute graph. You would build a computation engine from the abstract graph and run that. This would allow
