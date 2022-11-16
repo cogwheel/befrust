@@ -107,10 +107,7 @@ impl BusValue {
 
 impl Debug for BusValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BusValue")
-            .field("val", &format_args!("{:#x}", self.val))
-            .field("error", &format_args!("{:#x}", self.error))
-            .finish()
+        write!(f, "{:X}⚠{:X}", self.val, self.error)
     }
 }
 
