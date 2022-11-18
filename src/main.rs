@@ -118,7 +118,7 @@ impl DataBlock {
 
         let reg_load = nand_gate(graph, "reg_load");
         graph.connect(&store, reg_load.input_a());
-        graph.connect(&d_ce, reg_load.input_b());
+        graph.connect(&p_ce, reg_load.input_b());
         graph.connect(reg_load.output(), reg.load_inv());
 
         let ptr_count = &count & &p_ce;
@@ -157,8 +157,8 @@ fn main() {
 
     let mut graph = Graph::new();
 
-    let mut up = graph.new_output("up", Signal::High);
-    let down = !&up;
+    let mut down = graph.new_output("down", Signal::Low);
+    let up = !&down;
 
     let mut count = graph.new_output("count", Signal::Low);
     let mut store = graph.new_output("store", Signal::Low);
@@ -188,6 +188,8 @@ fn main() {
     println!("{:?}", d_block);
 
     reset.set_output(Signal::Low);
+    graph.run();
+
     d_ce.set_output(Signal::High);
     graph.run();
     println!("d_ce high: {:?}", d_block);
@@ -200,14 +202,16 @@ fn main() {
     graph.run();
     println!("count low: {:?}", d_block);
 
-    count.set_output(Signal::High);
-    graph.run();
-    println!("count high: {:?}", d_block);
+    graph.pulse_output(&mut count);
+    println!("count pulse: {:?}\n\n", d_block);
 
-    count.set_output(Signal::Low);
-    graph.run();
+    store.set_output(Signal::High);
+    dbg!(graph.run());
+    println!("store high: {:?}", d_block);
 
-    println!("count low: {:?}", d_block);
+    store.set_output(Signal::Low);
+    graph.run();
+    println!("store low: {:?}", d_block);
 
     // test data ptr
     d_ce.set_output(Signal::Low);
@@ -227,7 +231,7 @@ fn main() {
     graph.run();
     println!("ptr pulse 2 {:?}", d_block);
 
-    up.set_output(Signal::Low);
+    down.set_output(Signal::High);
 
     count.set_output(Signal::High);
     graph.run();
@@ -245,12 +249,13 @@ fn main() {
 
     println!("ptr down 5 {:?}", d_block);
 
-    up.set_output(Signal::High);
+    down.set_output(Signal::Low);
     graph.pulse_output(&mut count);
     graph.pulse_output(&mut count);
-    graph.pulse_output(&mut count);
+    graph.pulse_output(&mut store);
+    //graph.pulse_output(&mut count);
 
-    println!("ptr up 3 {:?}", d_block);
+    println!("ptr up 2 {:?}", d_block);
 
     p_ce.set_output(Signal::Low);
     graph.run();
