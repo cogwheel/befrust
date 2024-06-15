@@ -10,9 +10,9 @@ Get what's already here in ship-shape.
   * [X] add doc comments
   * [X] probably get rid of derive-getters
 * [ ] Comprehensive tests
-  * [ ] tests succeeded when ic74193's `output()` returned `dN*` instead of `qN*`
+  * [ ] Why did tests succeed when ic74193's `output()` returned `dN*` instead of `qN*`?
 * [ ] Finish data block
-  * [ ] Fix data counter
+  * [X] Fix data counter
   * [ ] Add clear clock
 
 ## Later

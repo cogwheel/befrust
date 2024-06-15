@@ -682,7 +682,7 @@ impl IcCY7C199 {
     /// Otherwise, pins are set to output the contents of ram at the current address if `oe_inv` is
     ///     Low
     ///
-    /// Otherwise, pins are net to input and their value is written into ram if `we_inv` is Low
+    /// Otherwise, pins are set to input and their value is written into ram if `we_inv` is Low
     pub fn io(&self) -> &[Pin] {
         &self.0[Self::IO_START..Self::IO_END]
     }
@@ -697,6 +697,8 @@ impl IcCY7C199 {
         let mut states = [PinState::INPUT; Self::NUM_PINS];
         Self::set_io(&mut states, PinState::HiZ);
 
+        // TODO: Need a way to examine this vector
+        // TODO: Randomize the contents
         let mut ram = vec![0xff; Self::NUM_WORDS];
 
         let pins = graph.new_part(name, &states, move |pins| {
@@ -723,32 +725,34 @@ impl IcCY7C199 {
         let data = io_pins.iter().val().unwrap();
         let addr = addr_pins.iter().val().unwrap();
 
-        if ce.is_lowish() || (oe.is_lowish() && we.is_lowish()) {
+        if ce.is_lowish() {
             Self::set_io(pins, PinState::HiZ);
         } else if oe.is_high() {
             let data = ram[addr];
             Self::set_output(io_pins, data as usize);
-        } else if we.is_high() {
-            ram[addr] = data as u8;
+        } else {
             Self::set_input(io_pins, data);
+
+            if we.is_high() {
+                println!("writing {} to {}", data, addr);
+                ram[addr] = data as u8;
+            }
         }
     }
 
     /// Sets the pins to output the given value
     fn set_output(pins: &mut [PinState], val: usize) {
+        let bus_val = BusValue::new_val(val);
         for (i, state) in pins.iter_mut().enumerate() {
-            let bit = val & (1 << i);
-            let signal = if bit == 0 { Signal::Low } else { Signal::High };
-            *state = PinState::Output(signal)
+            *state = PinState::Output(bus_val.sig(i));
         }
     }
 
     /// Changes the pins to inputs and sets them to the given value
     fn set_input(pins: &mut [PinState], val: usize) {
+        let bus_val = BusValue::new_val(val);
         for (i, state) in pins.iter_mut().enumerate() {
-            let bit = val & (1 << i);
-            let signal = if bit == 0 { Signal::Low } else { Signal::High };
-            *state = PinState::Input(signal)
+            *state = PinState::Input(bus_val.sig(i));
         }
     }
 }
