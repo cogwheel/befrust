@@ -12,7 +12,6 @@ pub struct DataBlock {
     reset: Pin,
     bus: BusBuffer,
     ptr: Counter16Bit,
-    zero: NaryGate,
 }
 
 impl Debug for DataBlock {
@@ -20,7 +19,6 @@ impl Debug for DataBlock {
         f.debug_struct("DataBlock")
             .field("data", &self.data().iter().val())
             .field("addr", &self.addr().iter().val())
-            .field("zero", &self.zero().sig())
             .finish()
     }
 }
@@ -52,62 +50,84 @@ impl DataBlock {
         &self.bus.output()
     }
 
-    pub fn zero(&self) -> &Pin {
-        self.zero.output()
-    }
-
     pub fn addr(&self) -> [&Pin; 16] {
         self.ptr.output()
     }
 
     pub fn new(graph: &mut Graph, name: &str) -> Self {
         let make_name = |n: &str| format!("{}.{}", name, n);
-        let ram = IcCY7C199::new(graph, &make_name("ram"));
+
+        // `ptr` stores the address for operations `<` and `>`
         let ptr = Counter16Bit::new(graph, &make_name("ptr"));
+
+        // `reg` stores the current working counter for operations `+` and `-`
+        // This is transferred to/from `ram` as needed when `ptr` changes
         let reg = Counter8Bit::new(graph, &make_name("reg"));
 
-        let buf = BusTristate::new(graph, &make_name("buf"), 8);
-
-        let zero = nor_nary(graph, &make_name("zero"), ram.io().len());
-
-        let bus = BusBuffer::new(graph, &make_name("bus"), 8);
-
-        for (ram_pin, ptr_pin) in zip(ram.addr(), ptr.output()) {
-            ram_pin.connect(ptr_pin);
+        let ram = IcCY7C199::new(graph, &make_name("ram"));
+        // Connect pointer outputs to the ram address lines
+        for (ptr_pin, ram_pin) in zip(ptr.output(), ram.addr()) {
+            ptr_pin.connect(ram_pin);
         }
 
+        // TODO: un-hardcode the 8s? then again... u8 is used everywhere
+
+        // Main data bus, also connected to other components (e.g. I/O)
+        let bus = BusBuffer::new(graph, &make_name("bus"), 8);
+
+        // Allows reg to be connected bidirectionally to or disconnected from the bus
+        let reg_interface = BusTristate::new(graph, &make_name("reg_interface"), 8);
+
+        // Connect everything to the bus input. The bus output is the external interface
         for i in 0..8 {
             graph.connect_all(&[
                 &bus.input()[i],
                 &ram.io()[i],
                 reg.input()[i],
-                &buf.output()[i],
-                &zero.input()[i],
+                &reg_interface.output()[i],
             ]);
-            graph.connect(&reg.output()[i], &buf.input()[i]);
+            graph.connect(&reg.output()[i], &reg_interface.input()[i]);
         }
 
         let up = graph.new_input(&make_name("up"));
         let down = graph.new_input(&make_name("down"));
 
-        let count = graph.new_input(&make_name("count"));
-        let store = graph.new_input(&make_name("store"));
+        let count_clock = graph.new_input(&make_name("count_clock"));
+        let store_clock = graph.new_input(&make_name("store_clock"));
 
-        let p_ce = graph.new_input(&make_name("p_ce"));
-        let d_ce = graph.new_input(&make_name("d_ce"));
+        let ptr_count_en = graph.new_input(&make_name("ptr_count_en"));
+        let data_count_en = graph.new_input(&make_name("data_count_en"));
 
         //let mut clear_ck = graph.new_output("clear_ck", Signal::Off);
         let reset = graph.new_input(&make_name("reset"));
 
-        let low = graph.new_output("LOW", Signal::Low);
-
         graph.connect_all(&[&reset, reg.clear(), ptr.clear()]);
+
+        // Leave ram chip always enabled. We won't need it unless we want
+        // to support larger ram sizes or (lol) optimize the power usage
+        // TODO: is there a global low signal somewhere? should there be?
+        let low = graph.new_output("LOW", Signal::Low);
         low.connect(ram.ce_inv());
 
-        let reg_not_ram = &reset | &d_ce;
-        graph.connect_all(&[&reg_not_ram, buf.en(), ram.oe_inv()]);
+        // Only the ram or the register should be outputting to the bus, not
+        // both.
+        //
+        // During normal operation, the register output is enabled when data
+        // count is enabled (i.e. we want to see the result of `+` and `-`).
+        // Otherwise ram output is enabled. TODO: need to disable ram out when
+        // doing an input `,` operation
+        //
+        // During reset, the register is outputting zero, so we want the RAM
+        // to read that while cycling through the address space. This will
+        // clear the contents of RAM (NYI)
+        let reg_not_ram = &reset | &data_count_en;
 
-        let reg_count = &count & &d_ce;
+        // Since RAM OE is inverted but the tristate enable is not, we can
+        // just connect them all to the same control signal
+        graph.connect_all(&[&reg_not_ram, reg_interface.en(), ram.oe_inv()]);
+
+        // Count the data register up or down on the count clock when enabled
+        let reg_count = &count_clock & &data_count_en;
         let reg_up = nand_gate(graph, "reg_up");
         let reg_down = nand_gate(graph, "reg_down");
         graph.connect_all(&[&reg_count, reg_up.input_a(), reg_down.input_a()]);
@@ -116,12 +136,8 @@ impl DataBlock {
         graph.connect(reg_up.output(), reg.up());
         graph.connect(reg_down.output(), reg.down());
 
-        let reg_load = nand_gate(graph, "reg_load");
-        graph.connect(&store, reg_load.input_a());
-        graph.connect(&p_ce, reg_load.input_b());
-        graph.connect(reg_load.output(), reg.load_inv());
-
-        let ptr_count = &count & &p_ce;
+        // Count the pointer up or down on the count clock when enabled
+        let ptr_count = &count_clock & &ptr_count_en;
         let ptr_up = nand_gate(graph, "ptr_up");
         // TODO: ptr_up = nor_gate(&up & &ptr_count, &clear_ck & &reset)
         let ptr_down = nand_gate(graph, "ptr_down");
@@ -131,22 +147,30 @@ impl DataBlock {
         graph.connect(ptr_up.output(), ptr.up());
         graph.connect(ptr_down.output(), ptr.down());
 
+        // Load the reg from RAM on the store clock when ptr count is enabled (i.e. after ptr
+        // crements)
+        let reg_load = nand_gate(graph, "reg_load");
+        graph.connect(&store_clock, reg_load.input_a());
+        graph.connect(&ptr_count_en, reg_load.input_b());
+        graph.connect(reg_load.output(), reg.load_inv());
+
+        // Write from the bus to RAM on the store clock when data count is enabled (i.e. after reg
+        // crements).
         let ram_we = nor_gate(graph, "ram_we");
-        let write = &store & &d_ce;
+        let write = &store_clock & &data_count_en;
         graph.connect(&reset, ram_we.input_a());
         graph.connect(&write, ram_we.input_b());
         graph.connect(ram_we.output(), ram.we_inv());
 
         DataBlock {
-            zero,
             bus,
-            d_ce,
-            p_ce,
+            d_ce: data_count_en,
+            p_ce: ptr_count_en,
             up,
             ptr,
             down,
-            count,
-            store,
+            count: count_clock,
+            store: store_clock,
             reset,
         }
     }
@@ -157,20 +181,31 @@ fn main() {
 
     let mut graph = Graph::new();
 
+    // Create signals to send as inputs to the data block
+    //
+    // these will be outputs of the control block eventually
+
+    // Increment direction
     let mut down = graph.new_output("down", Signal::Low);
     let up = !&down;
 
+    // clock phases
+    //
+    // Count - increments any enabled counters (pointers, registers, etc.)
+    // Store - commits any changes (e.g. writing ram after data increments)
     let mut count = graph.new_output("count", Signal::Low);
     let mut store = graph.new_output("store", Signal::Low);
 
+    // Enable lines
     let mut p_ce = graph.new_output("p_ce", Signal::Low);
     let mut d_ce = graph.new_output("d_ce", Signal::Low);
-
-    let d_block = DataBlock::new(&mut graph, "data");
 
     //let mut clear_ck = graph.new_output("clear_ck", Signal::Off);
     let mut reset = graph.new_output("reset", Signal::High);
 
+    let d_block = DataBlock::new(&mut graph, "data");
+
+    // Connect our manual signals to the data block
     graph.connect_pairs(&[
         (&up, d_block.up()),
         (&down, d_block.down()),
@@ -180,56 +215,67 @@ fn main() {
         (&d_ce, d_block.d_ce()),
         (&reset, d_block.reset()),
     ]);
-    println!("{:?}", d_block);
 
-    graph.run();
+    // The zero flag constantly reads from the bus for use in control signals
+    let zero = nor_nary(&mut graph, "zero", d_block.data().len());
+
+    let print_debug =
+        |m: &str| println!("{}: {:?}, z:{:?}", m, d_block, zero.output().state().val());
+
+    print_debug("connected graph");
+
+    dbg!(graph.run());
+    print_debug("first_run");
+
+    // TODO: pulse the clear clock at least ram.len() times to zero out RAM
+
+    // TODO: maybe reset ram address to 0 at the end of reset, but isn't necessary since counters
+    // wrap. It would be useful for debugging to have programs always start at 0 though...
 
     // Test data reg
-    println!("{:?}", d_block);
-
     reset.set_output(Signal::Low);
     graph.run();
 
     d_ce.set_output(Signal::High);
     graph.run();
-    println!("d_ce high: {:?}", d_block);
+    print_debug("d_ce high");
 
     count.set_output(Signal::High);
     graph.run();
-    println!("count high: {:?}", d_block);
+    print_debug("count high");
 
     count.set_output(Signal::Low);
     graph.run();
-    println!("count low: {:?}", d_block);
+    print_debug("count low");
 
     graph.pulse_output(&mut count);
-    println!("count pulse: {:?}\n\n", d_block);
+    print_debug("count pulse");
 
     store.set_output(Signal::High);
     dbg!(graph.run());
-    println!("store high: {:?}", d_block);
+    print_debug("store high");
 
     store.set_output(Signal::Low);
     graph.run();
-    println!("store low: {:?}", d_block);
+    print_debug("store low");
 
     // test data ptr
     d_ce.set_output(Signal::Low);
     graph.run();
-    println!("d_ce low: {:?}", d_block);
+    print_debug("d_ce low");
 
     p_ce.set_output(Signal::High);
     graph.run();
-    println!("p_ce high: {:?}", d_block);
+    print_debug("p_ce high");
 
     graph.pulse_output(&mut count);
 
-    println!("ptr pulse 1{:?}", d_block);
+    print_debug("ptr pulse 1");
     count.set_output(Signal::High);
     graph.run();
     count.set_output(Signal::Low);
     graph.run();
-    println!("ptr pulse 2 {:?}", d_block);
+    print_debug("ptr pulse 2");
 
     down.set_output(Signal::High);
 
@@ -247,23 +293,32 @@ fn main() {
     count.set_output(Signal::Low);
     graph.run();
 
-    println!("ptr down 5 {:?}", d_block);
+    print_debug("ptr down 5");
 
     down.set_output(Signal::Low);
+    graph.pulse_output(&mut count);
+    graph.pulse_output(&mut count);
     graph.pulse_output(&mut count);
     graph.pulse_output(&mut count);
     graph.pulse_output(&mut store);
     //graph.pulse_output(&mut count);
 
-    println!("ptr up 2 {:?}", d_block);
+    print_debug("ptr up 4");
 
     p_ce.set_output(Signal::Low);
     graph.run();
-    println!("pe low {:?}", d_block);
+    print_debug("pe low");
 
     d_ce.set_output(Signal::High);
 
     graph.run();
+    print_debug("p_ce/d_ce swap");
 
-    println!("p_ce/d_ce swap {:?}", d_block);
+    graph.pulse_output(&mut count);
+
+    print_debug("data count up");
+
+    graph.pulse_output(&mut store);
+
+    print_debug("data store");
 }

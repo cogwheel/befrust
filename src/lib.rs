@@ -107,7 +107,9 @@ impl BusValue {
 
 impl Debug for BusValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:X}⚠{:X}", self.val, self.error)
+        // Bus values are displayed as "V⊙E", with the intuition that
+        // `val XNOR error` represents the set of valid bits in the value
+        write!(f, "{:X}⊙{:X}", self.val, self.error)
     }
 }
 

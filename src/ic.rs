@@ -698,6 +698,7 @@ impl IcCY7C199 {
         Self::set_io(&mut states, PinState::HiZ);
 
         // TODO: Need a way to examine this vector
+        // TODO: Randomize the contents
         let mut ram = vec![0xff; Self::NUM_WORDS];
 
         let pins = graph.new_part(name, &states, move |pins| {
@@ -733,7 +734,7 @@ impl IcCY7C199 {
             Self::set_input(io_pins, data);
 
             if we.is_high() {
-                println!("writing {}", data);
+                println!("writing {} to {}", data, addr);
                 ram[addr] = data as u8;
             }
         }
