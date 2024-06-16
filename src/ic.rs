@@ -766,7 +766,7 @@ mod test_counter {
     pub fn test_load() {
         let mut graph = Graph::new();
 
-        let d = graph.new_pins(
+        let mut d = graph.new_pins(
             "d",
             &[
                 PinState::Output(Signal::High),
@@ -816,6 +816,7 @@ mod test_counter {
 
         load_inv.set_output(Signal::Low);
         graph.run();
+
         assert_eq!(
             &[Signal::High, Signal::Low, Signal::Low, Signal::High,],
             &[
@@ -828,8 +829,30 @@ mod test_counter {
         load_inv.set_output(Signal::High);
 
         graph.run();
+
         assert_eq!(
             &[Signal::High, Signal::Low, Signal::Low, Signal::High,],
+            &[
+                counter.out1().sig(),
+                counter.out2().sig(),
+                counter.out3().sig(),
+                counter.out4().sig(),
+            ]
+        );
+
+        // make sure the module isn't just looping back the input. Yes this actually happened -_-
+        for pin in d.iter_mut() {
+            pin.set_output(Signal::Low);
+        }
+        graph.run();
+
+        assert_eq!(
+            &[
+                counter.output()[0].sig(),
+                counter.output()[1].sig(),
+                counter.output()[2].sig(),
+                counter.output()[3].sig(),
+            ],
             &[
                 counter.out1().sig(),
                 counter.out2().sig(),

@@ -1,6 +1,6 @@
 # TODO
 
-## Now
+## Previously (was Now)
 
 Get what's already here in ship-shape.
 
@@ -9,13 +9,13 @@ Get what's already here in ship-shape.
 * [X] rsdoc everything
   * [X] add doc comments
   * [X] probably get rid of derive-getters
-* [ ] Comprehensive tests
-  * [ ] Why did tests succeed when ic74193's `output()` returned `dN*` instead of `qN*`?
+* [ ] ~~Comprehensive tests~~ Integration tests are more useful at this point, and the integration itself is the best integration test
+  * [X] Why did tests succeed when ic74193's `output()` returned `dN*` instead of `qN*`? Because the assertions comparisons succeeded since the expected data was emitted.
 * [X] Finish data block
   * [X] Fix data counter (works, but slow; cheating for now)
   * [X] Add clear clock
 
-## Later
+## Now (was Later)
 
 Make the bfpu, including any necessary or helpful updates to the compute graph
 
@@ -25,7 +25,7 @@ Make the bfpu, including any necessary or helpful updates to the compute graph
 * [ ] Helper to connect busses (like connect\_many, NaryGate::connect\_inputs())
 * [ ] Clocks - 3 phase: instruction -> count -> store
 * [ ] Randomize RAM contents - need some re-init mechanism (chonky... might be helped by separating
-  graph from execution)
+  graph from execution) <- What did I mean by this??
 * [ ] Debugging
   * [ ] more custom Debug implementations
   * [ ] Trace particular pin states
