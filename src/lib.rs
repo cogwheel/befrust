@@ -1,3 +1,4 @@
+pub mod data_block;
 pub mod gate;
 pub mod graph;
 pub mod ic;
@@ -5,6 +6,7 @@ pub mod ic;
 use std::fmt::{Debug, Formatter};
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
+pub use data_block::*;
 pub use gate::*;
 pub use graph::*;
 pub use ic::*;
