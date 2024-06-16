@@ -11,9 +11,9 @@ Get what's already here in ship-shape.
   * [X] probably get rid of derive-getters
 * [ ] Comprehensive tests
   * [ ] Why did tests succeed when ic74193's `output()` returned `dN*` instead of `qN*`?
-* [ ] Finish data block
-  * [X] Fix data counter
-  * [ ] Add clear clock
+* [X] Finish data block
+  * [X] Fix data counter (works, but slow; cheating for now)
+  * [X] Add clear clock
 
 ## Later
 
