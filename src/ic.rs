@@ -734,7 +734,7 @@ impl IcCY7C199 {
             Self::set_input(io_pins, data);
 
             if we.is_high() {
-                println!("writing {} to {}", data, addr);
+                //println!("writing {} to {}", data, addr);
                 ram[addr] = data as u8;
             }
         }

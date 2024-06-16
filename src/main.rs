@@ -1,6 +1,7 @@
 use befrust::*;
 use std::fmt::{Debug, Formatter};
-use std::iter::zip;
+use std::io::Write;
+use std::iter::zip; // for flush
 
 pub struct DataBlock {
     d_ce: Pin,
@@ -10,6 +11,7 @@ pub struct DataBlock {
     count: Pin,
     store: Pin,
     reset: Pin,
+    clear: Pin,
     bus: BusBuffer,
     ptr: Counter16Bit,
 }
@@ -44,6 +46,9 @@ impl DataBlock {
     }
     pub fn reset(&self) -> &Pin {
         &self.reset
+    }
+    pub fn clear(&self) -> &Pin {
+        &self.clear
     }
 
     pub fn data(&self) -> &[Pin] {
@@ -94,14 +99,14 @@ impl DataBlock {
 
         let count_clock = graph.new_input(&make_name("count_clock"));
         let store_clock = graph.new_input(&make_name("store_clock"));
+        let clear_clock = graph.new_input(&make_name("clear_clock"));
 
         let ptr_count_en = graph.new_input(&make_name("ptr_count_en"));
         let data_count_en = graph.new_input(&make_name("data_count_en"));
 
-        //let mut clear_ck = graph.new_output("clear_ck", Signal::Off);
         let reset = graph.new_input(&make_name("reset"));
 
-        graph.connect_all(&[&reset, reg.clear(), ptr.clear()]);
+        reset.connect(reg.clear());
 
         // Leave ram chip always enabled. We won't need it unless we want
         // to support larger ram sizes or (lol) optimize the power usage
@@ -136,8 +141,9 @@ impl DataBlock {
         graph.connect(reg_up.output(), reg.up());
         graph.connect(reg_down.output(), reg.down());
 
-        // Count the pointer up or down on the count clock when enabled
-        let ptr_count = &count_clock & &ptr_count_en;
+        // Count the pointer up or down on the count clock when enabled or during the reset clear
+        //let clear = &reset & &clear_clock;
+        let ptr_count = (&count_clock & &ptr_count_en) | (&reset & &clear_clock);
         let ptr_up = nand_gate(graph, "ptr_up");
         // TODO: ptr_up = nor_gate(&up & &ptr_count, &clear_ck & &reset)
         let ptr_down = nand_gate(graph, "ptr_down");
@@ -172,6 +178,7 @@ impl DataBlock {
             count: count_clock,
             store: store_clock,
             reset,
+            clear: clear_clock,
         }
     }
 }
@@ -191,16 +198,19 @@ fn main() {
 
     // clock phases
     //
+    // TODO:Instruction - Latches the next instruction and increments program counter
+    //
     // Count - increments any enabled counters (pointers, registers, etc.)
     // Store - commits any changes (e.g. writing ram after data increments)
+    // Clear - only active during reset, used to step through RAM addresses
     let mut count = graph.new_output("count", Signal::Low);
     let mut store = graph.new_output("store", Signal::Low);
+    let mut clear = graph.new_output("clear", Signal::Low);
 
     // Enable lines
     let mut p_ce = graph.new_output("p_ce", Signal::Low);
     let mut d_ce = graph.new_output("d_ce", Signal::Low);
 
-    //let mut clear_ck = graph.new_output("clear_ck", Signal::Off);
     let mut reset = graph.new_output("reset", Signal::High);
 
     let d_block = DataBlock::new(&mut graph, "data");
@@ -214,6 +224,7 @@ fn main() {
         (&p_ce, d_block.p_ce()),
         (&d_ce, d_block.d_ce()),
         (&reset, d_block.reset()),
+        (&clear, d_block.clear()),
     ]);
 
     // The zero flag constantly reads from the bus for use in control signals
@@ -224,10 +235,41 @@ fn main() {
 
     print_debug("connected graph");
 
+    ////// Use the graph
+
     dbg!(graph.run());
     print_debug("first_run");
 
-    // TODO: pulse the clear clock at least ram.len() times to zero out RAM
+    // TODO: need to optimize so we can actually clear all of RAM
+    //
+    // For now ust do a couple clears to verify that the circuitry is working
+    const NUM_CLEARS: i32 = 5; // should be at least the size of ram (1 << 15)
+
+    // This is a cheat for now. IRL the clear clock would always be running but ignored while reset
+    // is off
+    println!("Clearing RAM");
+    //println!("This can take a while on debug builds");
+    for i in 0..NUM_CLEARS {
+        graph.pulse_output(&mut clear);
+        if i % 1000 == 0 {
+            print!("{}% ", ((i as f32 / (1 << 15) as f32) * 100.0) as i32);
+            std::io::stdout().flush().unwrap();
+        }
+    }
+    println!("100%");
+
+    print_debug("end of loop");
+
+    clear.set_output(Signal::High);
+    dbg!(graph.run());
+    clear.set_output(Signal::Low);
+    dbg!(graph.run());
+
+    print_debug("end of clear");
+
+    // At this point, the address pointer is at some arbitrary location depending on how long the
+    // reset line is held (i.e. how many ticks of the clear count happened while reset was active).
+    // IRL the clear clock will be in the 2 MHz range which can clear all of RAM in a few dozen ms.
 
     // TODO: maybe reset ram address to 0 at the end of reset, but isn't necessary since counters
     // wrap. It would be useful for debugging to have programs always start at 0 though...
@@ -235,6 +277,8 @@ fn main() {
     // Test data reg
     reset.set_output(Signal::Low);
     graph.run();
+
+    print_debug("end reset");
 
     d_ce.set_output(Signal::High);
     graph.run();
@@ -301,7 +345,6 @@ fn main() {
     graph.pulse_output(&mut count);
     graph.pulse_output(&mut count);
     graph.pulse_output(&mut store);
-    //graph.pulse_output(&mut count);
 
     print_debug("ptr up 4");
 
